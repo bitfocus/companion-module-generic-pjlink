@@ -1,6 +1,6 @@
 {
   "name": "pjlink",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "PJ-Link plugin for Companion",
   "main": "pjlink.js",
   "scripts": {

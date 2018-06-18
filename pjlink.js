@@ -111,27 +111,27 @@ instance.prototype.action = function(action) {
 	switch (action.action){
 
 		case 'powerOn':
-			cmd = '%1powr 1 \r';
+			cmd = '%1powr 1';
 			break;
 
 		case 'powerOff':
-			cmd = '%1powr 0 \r';
+			cmd = '%1powr 0';
 			break;
 
 		case 'shutterOpen':
-			cmd = '%1avmt 30 \r';
+			cmd = '%1avmt 30';
 			break;
 
 		case 'shutterClose':
-			cmd = '%1avmt 31 \r';
+			cmd = '%1avmt 31';
 			break;
 
 		case 'freeze':
-			cmd = '%2frez 1 \r';
+			cmd = '%2frez 1';
 			break;
 
 		case 'unfreeze':
-			cmd = '%2frez 0 \r';
+			cmd = '%2frez 0';
 			break;
 
 	};
@@ -141,17 +141,17 @@ instance.prototype.action = function(action) {
 
 	if (cmd !== undefined) {
 
-		debug('sending tcp',cmd,"to",self.config.host);
+		debug('sending ',cmd,"to",self.config.host);
 
 		if (self.socket !== undefined && self.socket.connected) {
-			self.socket.send(cmd);
+			self.socket.send(cmd + "\r");
 		} else {
 			debug('Socket not connected :(');
 		}
 
 	}
 
-	debug('action():', action);
+	// debug('action():', action);
 
 };
 
