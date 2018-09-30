@@ -1,11 +1,16 @@
 {
   "name": "pjlink",
-  "version": "0.0.2",
+  "version": "1.0.0",
+	"api_version": "1.0.0",
+	"keywords": [ "Projector", "Protocol" ],
+	"manufacturer": "PJLink",
+	"product": "Projector",
+	"shortname": "pj",
   "description": "PJ-Link plugin for Companion",
   "main": "pjlink.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Per Roine",
+  "author": "Per Roine <per.roine@gmail.com>",
   "license": "ISC"
 }
