@@ -1,5 +1,6 @@
-var tcp = require('../../tcp');
+var net = require('net');
 var instance_skel = require('../../instance_skel');
+var crypto = require('crypto');
 var debug;
 var log;
 
@@ -27,13 +28,22 @@ instance.prototype.init = function() {
 	debug = self.debug;
 	log = self.log;
 
-	self.status(1,'Connecting'); // status ok!
+	self.commands = [];
 
-	self.init_tcp();
+	self.status(self.STATUS_UNKNOWN, 'Connecting');
+
+	// Initial connect to check status
+	self.send('%1POWR ?');
 };
 
-instance.prototype.init_tcp = function() {
+instance.prototype.init_tcp = function(cb) {
 	var self = this;
+	var receivebuffer = '';
+
+	if (self.socketTimer) {
+		clearInterval(self.socketTimer);
+		delete self.socketTimer;
+	}
 
 	if (self.socket !== undefined) {
 		self.socket.destroy();
@@ -41,24 +51,128 @@ instance.prototype.init_tcp = function() {
 	}
 
 	if (self.config.host) {
-		self.socket = new tcp(self.config.host, 4352);
-
-		self.socket.on('status_change', function (status, message) {
-			self.status(status, message);
-		});
+		self.connecting = true;
+		self.commands = [];
+		self.socket = new net.Socket();
+		self.socket.setNoDelay(true);
 
 		self.socket.on('error', function (err) {
 			debug("Network error", err);
 			self.status(self.STATE_ERROR, err);
 			self.log('error',"Network error: " + err.message);
+			self.connected = false;
+			self.connecting = false;
+			delete self.socket;
 		});
 
 		self.socket.on('connect', function () {
-			self.status(self.STATE_OK);
-			debug("Connected");
+			receivebuffer = '';
+			self.connect_time = Date.now();
+
+			if (self.currentStatus != self.STATUS_OK) {
+				self.status(self.STATUS_OK, 'Connected');
+			}
+
+			self.connected = true;
 		})
 
-		self.socket.on('data', function (data) {});
+		self.socket.on('end', function () {
+			self.connected = false;
+			self.connecting = false;
+		});
+
+		self.socket.on('data', function (chunk) {
+			// separate buffered stream into lines with responses
+			var i = 0, line = '', offset = 0;
+			receivebuffer += chunk;
+			while ( (i = receivebuffer.indexOf('\r', offset)) !== -1) {
+				line = receivebuffer.substr(offset, i - offset);
+				offset = i + 1;
+				self.socket.emit('receiveline', line.toString());
+			}
+			receivebuffer = receivebuffer.substr(offset);
+		});
+
+		self.socket.on('receiveline', function (data) {
+			self.connect_time = Date.now();
+
+			if (data.match(/^PJLINK 0/)) {
+				// no auth
+				if (typeof cb == 'function') {
+					cb();
+				}
+				return;
+			}
+
+			if (data.match(/^PJLINK ERRA/)) {
+				self.log('error', 'Authentication error. Password not accepted by projector');
+				self.commands.length = 0;
+				self.status(self.STATUS_ERROR, 'Authenticatione error');
+				self.connected = false;
+				self.connecting = false;
+				self.socket.destroy();
+				delete self.socket;
+				return;
+			}
+
+			var match;
+			if (match = data.match(/^PJLINK 1 (\S+)/)) {
+				var digest = match[1] + ' ' + self.config.password;
+				var hasher = crypto.createHash('md5');
+				var hex = hasher.update(digest, 'utf-8').digest('hex');
+				self.socket.write(hex);
+
+				// Shoot and forget, by protocol definition :/
+				if (typeof cb == 'function') {
+					cb();
+				}
+			}
+
+			if (self.commands.length) {
+				var cmd = self.commands.shift();
+
+				self.socket.write(cmd + "\r");
+			} else {
+				clearInterval(self.socketTimer);
+
+				self.socketTimer = setInterval(function () {
+
+					if (self.commands.length > 0) {
+						var cmd = self.commands.shift();
+						self.connect_time = Date.now();
+						self.socket.write(cmd + "\r");
+						clearInterval(self.socketTimer);
+						delete self.socketTimer;
+					}
+
+					if (Date.now() - self.connect_time > 2000) {
+						self.socket.destroy();
+						delete self.socket;
+						self.connected = false;
+						self.connecting = false;
+						clearInterval(self.socketTimer);
+						delete self.socketTimer;
+						debug("disconnecting per protocol defintion :(");
+					}
+				}, 100);
+			}
+		});
+
+		self.socket.connect(4352, self.config.host);
+	}
+};
+
+instance.prototype.send = function(cmd) {
+	var self = this;
+
+	if (self.connecting) {
+		self.commands.push(cmd);
+	} else {
+		self.init_tcp(function () {
+			self.connect_time = Date.now();
+
+			self.socket.write(cmd + "\r");
+		});
 	}
 };
 
@@ -73,6 +187,12 @@ instance.prototype.config_fields = function () {
 			label: 'Target IP',
 			width: 6,
 			regex: self.REGEX_IP
+		},
+		{
+			type: 'textinput',
+			id: 'password',
+			label: 'PJLink password (empty for none)',
+			width: 6
 		}
 	]
 };
@@ -83,9 +203,8 @@ instance.prototype.destroy = function() {
 
 	if (self.socket !== undefined) {
 		self.socket.destroy();
+		delete self.socket;
 	}
-
-	debug("destroy", self.id);;
 };
 
 
@@ -143,12 +262,7 @@ instance.prototype.action = function(action) {
 
 		debug('sending ',cmd,"to",self.config.host);
 
-		if (self.socket !== undefined && self.socket.connected) {
-			self.socket.send(cmd + "\r");
-		} else {
-			debug('Socket not connected :(');
-		}
-
+		self.send(cmd);
 	}
 
 	// debug('action():', action);
