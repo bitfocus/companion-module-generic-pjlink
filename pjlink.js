@@ -147,7 +147,7 @@ instance.prototype.init_tcp = function(cb) {
 
 					if (Date.now() - self.connect_time > 2000) {
 
-						if (!self.socket) {
+						if (self.socket !== undefined) {
 							self.socket.destroy();
 						}
 
