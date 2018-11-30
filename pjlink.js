@@ -146,12 +146,20 @@ instance.prototype.init_tcp = function(cb) {
 					}
 
 					if (Date.now() - self.connect_time > 2000) {
-						self.socket.destroy();
+
+						if (!self.socket) {
+							self.socket.destroy();
+						}
+
 						delete self.socket;
 						self.connected = false;
 						self.connecting = false;
-						clearInterval(self.socketTimer);
-						delete self.socketTimer;
+
+						if (self.socketTimer) {
+							clearInterval(self.socketTimer);
+							delete self.socketTimer;
+						}
+
 						debug("disconnecting per protocol defintion :(");
 					}
 				}, 100);
