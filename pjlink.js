@@ -173,6 +173,10 @@ instance.prototype.init_tcp = function(cb) {
 							delete self.socketTimer;
 						}
 
+						setTimeout(function(o) {
+							self.init_tcp();
+						}, 3000);
+
 						debug("disconnecting per protocol defintion :(");
 					}
 				}, 100);
@@ -220,6 +224,10 @@ instance.prototype.config_fields = function () {
 // When module gets deleted
 instance.prototype.destroy = function() {
 	var self = this;
+
+	if (self.socketTimer) {
+		clearInterval(self.socketTimer);
+	}
 
 	if (self.socket !== undefined) {
 		self.socket.destroy();
