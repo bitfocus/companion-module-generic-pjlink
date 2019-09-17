@@ -88,8 +88,8 @@ instance.prototype.init_tcp = function(cb) {
 		self.socket.on('end', function () {
 			self.connected = false;
 			self.connecting = false;
-			self.status(self.STATE_ERROR, err);
-			self.log('error',"Socket ended");
+			self.status(self.STATE_ERROR);
+			self.log('error',"Socket ended??");
 		});
 
 		self.socket.on('data', function (chunk) {
