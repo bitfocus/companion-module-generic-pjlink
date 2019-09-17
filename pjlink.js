@@ -40,6 +40,8 @@ instance.prototype.init_tcp = function(cb) {
 	var self = this;
 	var receivebuffer = '';
 
+	debug("init_tcp");
+
 	if (self.socketTimer) {
 		clearInterval(self.socketTimer);
 		delete self.socketTimer;
@@ -63,9 +65,16 @@ instance.prototype.init_tcp = function(cb) {
 			self.connected = false;
 			self.connecting = false;
 			delete self.socket;
+
+			setTimeout(function(o) {
+				self.init_tcp();
+			}, 1000);
+
 		});
 
 		self.socket.on('connect', function () {
+
+			debug("connect()");
 			receivebuffer = '';
 			self.connect_time = Date.now();
 
@@ -79,6 +88,8 @@ instance.prototype.init_tcp = function(cb) {
 		self.socket.on('end', function () {
 			self.connected = false;
 			self.connecting = false;
+			self.status(self.STATE_ERROR, err);
+			self.log('error',"Socket ended");
 		});
 
 		self.socket.on('data', function (chunk) {
@@ -130,9 +141,11 @@ instance.prototype.init_tcp = function(cb) {
 
 			if (self.commands.length) {
 				var cmd = self.commands.shift();
-
 				self.socket.write(cmd + "\r");
-			} else {
+			}
+
+			else {
+
 				clearInterval(self.socketTimer);
 
 				self.socketTimer = setInterval(function () {
@@ -178,7 +191,6 @@ instance.prototype.send = function(cmd) {
 	} else {
 		self.init_tcp(function () {
 			self.connect_time = Date.now();
-
 			self.socket.write(cmd + "\r");
 		});
 	}
@@ -226,7 +238,6 @@ instance.prototype.actions = function(system) {
 		'shutterClose':   { label: 'Close Shutter' },
 		'freeze':         { label: 'Freeze Input' },
 		'unfreeze':       { label: 'Unfreeze Input' }
-
 	});
 };
 
