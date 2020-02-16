@@ -117,7 +117,7 @@ instance.prototype.init_tcp = function(cb) {
 
 			var match;
 			if (match = data.match(/^PJLINK 1 (\S+)/)) {
-				var digest = match[1] + ' ' + self.config.password;
+				var digest = match[1] + self.config.password;
 				var hasher = crypto.createHash('md5');
 				var hex = hasher.update(digest, 'utf-8').digest('hex');
 				self.socket.write(hex);
