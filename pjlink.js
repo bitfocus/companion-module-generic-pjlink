@@ -226,34 +226,27 @@ instance.prototype.actions = function(system) {
 		'shutterClose':   { label: 'Close Shutter' },
 		'freeze':         { label: 'Freeze Input' },
 		'unfreeze':       { label: 'Unfreeze Input' }
-
-		'powerOn':        	{ label: 'Power On Projector' },
-				'powerOff':       	{ label: 'Power Off Projector' },
-				'shutterOpen':    	{ label: 'Open Shutter' },
-				'shutterClose':   	{ label: 'Close Shutter' },
-				'freeze':         	{ label: 'Freeze Input' },
-				'unfreeze':       	{ label: 'Unfreeze Input' },
-				'inputSelect': {
-					label: 'Select Input',
-					options: [
-						{
-							type: 'dropdown',
-							label: 'Input to switch to',
-							id: 'inputNum',
-							default: '31',
-							choices: [
-								{ id: '11', label: 'RGB1'},
-								{ id: '12', label: 'RGB2' },
-								{ id: '31', label: 'DVI-D'},
-								{ id: '32', label: 'HDMI' },
-								{ id: '33', label: 'Digital link' },
-								{ id: '34', label: 'SDI1' },
-								{ id: '35', label: 'SDI2' }
-							]
-						}
+		'inputSelect': {
+		 	label: 'Select Input',
+		 	options: [
+				{
+					type: 'dropdown',
+					label: 'Input to switch to',
+					id: 'inputNum',
+					default: '31',
+					choices: [
+						{ id: '11', label: 'RGB1'},
+						{ id: '12', label: 'RGB2' },
+						{ id: '31', label: 'DVI-D'},
+						{ id: '32', label: 'HDMI' },
+						{ id: '33', label: 'Digital link' },
+						{ id: '34', label: 'SDI1' },
+						{ id: '35', label: 'SDI2' }
 					]
-				},
-		});
+				}
+			]
+		},
+	});
 };
 
 instance.prototype.action = function(action) {
