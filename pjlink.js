@@ -280,6 +280,10 @@ instance.prototype.action = function(action) {
 			cmd = '%2frez 0';
 			break;
 
+		case 'inputSelect':
+			cmd = '%1INPT ' + opt.inputNum;
+			break;
+
 	};
 
 
