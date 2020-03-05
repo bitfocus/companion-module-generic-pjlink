@@ -107,7 +107,7 @@ instance.prototype.init_tcp = function(cb) {
 			if (data.match(/^PJLINK ERRA/)) {
 				self.log('error', 'Authentication error. Password not accepted by projector');
 				self.commands.length = 0;
-				self.status(self.STATUS_ERROR, 'Authenticatione error');
+				self.status(self.STATUS_ERROR, 'Authentication error');
 				self.connected = false;
 				self.connecting = false;
 				self.socket.destroy();
@@ -117,9 +117,13 @@ instance.prototype.init_tcp = function(cb) {
 
 			var match;
 			if (match = data.match(/^PJLINK 1 (\S+)/)) {
+				self.log('info', match[1]);
+				self.log('info', self.config.password);
 				var digest = match[1] + self.config.password;
+				self.log('info', digest);
 				var hasher = crypto.createHash('md5');
 				var hex = hasher.update(digest, 'utf-8').digest('hex');
+				self.log('info', hex);
 				self.socket.write(hex);
 
 				// Shoot and forget, by protocol definition :/
@@ -225,14 +229,34 @@ instance.prototype.actions = function(system) {
 		'shutterOpen':    { label: 'Open Shutter' },
 		'shutterClose':   { label: 'Close Shutter' },
 		'freeze':         { label: 'Freeze Input' },
-		'unfreeze':       { label: 'Unfreeze Input' }
-
+		'unfreeze':       { label: 'Unfreeze Input' },
+		'inputToggle': {
+			label: 'Toggle Input',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Select input',
+					id: 'inputNum',
+					default: '31',
+					choices: [
+						{ id: '11', label: 'RGB1'},
+						{ id: '12', label: 'RGB2' },
+						{ id: '31', label: 'DVI-D'},
+						{ id: '32', label: 'HDMI' },
+						{ id: '33', label: 'Digital link' },
+						{ id: '34', label: 'SDI1' },
+						{ id: '35', label: 'SDI2' }
+					]
+				}
+			]
+		}
 	});
 };
 
 instance.prototype.action = function(action) {
 	var self = this;
 	var id = action.action;
+	var opt = action.options;
 	var cmd
 
 	switch (action.action){
@@ -259,6 +283,10 @@ instance.prototype.action = function(action) {
 
 		case 'unfreeze':
 			cmd = '%2frez 0';
+			break;
+
+		case 'inputToggle':
+			cmd = '%inpt ' + opt.inputNum;
 			break;
 
 	};
