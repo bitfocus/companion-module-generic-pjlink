@@ -117,13 +117,9 @@ instance.prototype.init_tcp = function(cb) {
 
 			var match;
 			if (match = data.match(/^PJLINK 1 (\S+)/)) {
-				self.log('info', match[1]);
-				self.log('info', self.config.password);
 				var digest = match[1] + self.config.password;
-				self.log('info', digest);
 				var hasher = crypto.createHash('md5');
 				var hex = hasher.update(digest, 'utf-8').digest('hex');
-				self.log('info', hex);
 				self.socket.write(hex);
 
 				// Shoot and forget, by protocol definition :/
