@@ -282,7 +282,7 @@ instance.prototype.action = function(action) {
 			break;
 
 		case 'inputToggle':
-			cmd = '%inpt ' + opt.inputNum;
+			cmd = '%1inpt ' + opt.inputNum;
 			break;
 
 	};
