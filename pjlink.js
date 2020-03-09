@@ -31,9 +31,7 @@ instance.prototype.init = function() {
 	self.commands = [];
 
 	self.status(self.STATUS_UNKNOWN, 'Connecting');
-
-	// Initial connect to check status
-	self.send('%1POWR ?');
+	
 };
 
 instance.prototype.init_tcp = function(cb) {
@@ -120,7 +118,8 @@ instance.prototype.init_tcp = function(cb) {
 				var digest = match[1] + self.config.password;
 				var hasher = crypto.createHash('md5');
 				var hex = hasher.update(digest, 'utf-8').digest('hex');
-				self.socket.write(hex);
+				// transmit the authentication hash and a pjlink command
+				self.socket.write(hex + "%1powr ?\r");
 
 				// Shoot and forget, by protocol definition :/
 				if (typeof cb == 'function') {
@@ -282,7 +281,7 @@ instance.prototype.action = function(action) {
 			break;
 
 		case 'inputToggle':
-			cmd = '%inpt ' + opt.inputNum;
+			cmd = '%1inpt ' + opt.inputNum;
 			break;
 
 	};
