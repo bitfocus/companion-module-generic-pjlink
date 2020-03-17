@@ -37,6 +37,7 @@ instance.prototype.init = function() {
 instance.prototype.init_tcp = function(cb) {
 	var self = this;
 	var receivebuffer = '';
+	self.passwordstring = '';
 
 	if (self.socketTimer) {
 		clearInterval(self.socketTimer);
@@ -69,6 +70,7 @@ instance.prototype.init_tcp = function(cb) {
 
 			if (self.currentStatus != self.STATUS_OK) {
 				self.status(self.STATUS_OK, 'Connected');
+				debug('Connected to projector');
 			}
 
 			self.connected = true;
@@ -77,6 +79,7 @@ instance.prototype.init_tcp = function(cb) {
 		self.socket.on('end', function () {
 			self.connected = false;
 			self.connecting = false;
+			debug('Disconnected');
 		});
 
 		self.socket.on('data', function (chunk) {
@@ -94,7 +97,12 @@ instance.prototype.init_tcp = function(cb) {
 		self.socket.on('receiveline', function (data) {
 			self.connect_time = Date.now();
 
+			debug('PJLINK: < ' + data);
+
 			if (data.match(/^PJLINK 0/)) {
+				debug('Projector does not need password');
+				self.passwordstring = '';
+
 				// no auth
 				if (typeof cb == 'function') {
 					cb();
@@ -103,6 +111,7 @@ instance.prototype.init_tcp = function(cb) {
 			}
 
 			if (data.match(/^PJLINK ERRA/)) {
+				debug('Password not accepted');
 				self.log('error', 'Authentication error. Password not accepted by projector');
 				self.commands.length = 0;
 				self.status(self.STATUS_ERROR, 'Authentication error');
@@ -130,7 +139,7 @@ instance.prototype.init_tcp = function(cb) {
 			if (self.commands.length) {
 				var cmd = self.commands.shift();
 
-				self.socket.write(cmd + "\r");
+				self.socket.write(self.passwordstring + cmd + "\r");
 			} else {
 				clearInterval(self.socketTimer);
 
@@ -139,12 +148,12 @@ instance.prototype.init_tcp = function(cb) {
 					if (self.commands.length > 0) {
 						var cmd = self.commands.shift();
 						self.connect_time = Date.now();
-						self.socket.write(cmd + "\r");
+						self.socket.write(self.passwordstring + cmd + "\r");
 						clearInterval(self.socketTimer);
 						delete self.socketTimer;
 					}
 
-					if (Date.now() - self.connect_time > 2000) {
+					if (Date.now() - self.connect_time > 4000) {
 
 						if (self.socket !== undefined && self.socket.destroy !== undefined) {
 							self.socket.destroy();
@@ -178,7 +187,7 @@ instance.prototype.send = function(cmd) {
 		self.init_tcp(function () {
 			self.connect_time = Date.now();
 
-			self.socket.write(cmd + "\r");
+			self.socket.write(self.passwordstring + cmd + "\r");
 		});
 	}
 };
