@@ -31,14 +31,13 @@ instance.prototype.init = function() {
 	self.commands = [];
 
 	self.status(self.STATUS_UNKNOWN, 'Connecting');
-
-	// Initial connect to check status
-	self.send('%1POWR ?');
+	
 };
 
 instance.prototype.init_tcp = function(cb) {
 	var self = this;
 	var receivebuffer = '';
+	self.passwordstring = '';
 
 	if (self.socketTimer) {
 		clearInterval(self.socketTimer);
@@ -71,6 +70,7 @@ instance.prototype.init_tcp = function(cb) {
 
 			if (self.currentStatus != self.STATUS_OK) {
 				self.status(self.STATUS_OK, 'Connected');
+				debug('Connected to projector');
 			}
 
 			self.connected = true;
@@ -79,6 +79,7 @@ instance.prototype.init_tcp = function(cb) {
 		self.socket.on('end', function () {
 			self.connected = false;
 			self.connecting = false;
+			debug('Disconnected');
 		});
 
 		self.socket.on('data', function (chunk) {
@@ -96,7 +97,12 @@ instance.prototype.init_tcp = function(cb) {
 		self.socket.on('receiveline', function (data) {
 			self.connect_time = Date.now();
 
+			debug('PJLINK: < ' + data);
+
 			if (data.match(/^PJLINK 0/)) {
+				debug('Projector does not need password');
+				self.passwordstring = '';
+
 				// no auth
 				if (typeof cb == 'function') {
 					cb();
@@ -105,9 +111,10 @@ instance.prototype.init_tcp = function(cb) {
 			}
 
 			if (data.match(/^PJLINK ERRA/)) {
+				debug('Password not accepted');
 				self.log('error', 'Authentication error. Password not accepted by projector');
 				self.commands.length = 0;
-				self.status(self.STATUS_ERROR, 'Authenticatione error');
+				self.status(self.STATUS_ERROR, 'Authentication error');
 				self.connected = false;
 				self.connecting = false;
 				self.socket.destroy();
@@ -120,7 +127,8 @@ instance.prototype.init_tcp = function(cb) {
 				var digest = match[1] + self.config.password;
 				var hasher = crypto.createHash('md5');
 				var hex = hasher.update(digest, 'utf-8').digest('hex');
-				self.socket.write(hex);
+				// transmit the authentication hash and a pjlink command
+				self.socket.write(hex + "%1powr ?\r");
 
 				// Shoot and forget, by protocol definition :/
 				if (typeof cb == 'function') {
@@ -131,7 +139,7 @@ instance.prototype.init_tcp = function(cb) {
 			if (self.commands.length) {
 				var cmd = self.commands.shift();
 
-				self.socket.write(cmd + "\r");
+				self.socket.write(self.passwordstring + cmd + "\r");
 			} else {
 				clearInterval(self.socketTimer);
 
@@ -140,12 +148,12 @@ instance.prototype.init_tcp = function(cb) {
 					if (self.commands.length > 0) {
 						var cmd = self.commands.shift();
 						self.connect_time = Date.now();
-						self.socket.write(cmd + "\r");
+						self.socket.write(self.passwordstring + cmd + "\r");
 						clearInterval(self.socketTimer);
 						delete self.socketTimer;
 					}
 
-					if (Date.now() - self.connect_time > 2000) {
+					if (Date.now() - self.connect_time > 4000) {
 
 						if (self.socket !== undefined && self.socket.destroy !== undefined) {
 							self.socket.destroy();
@@ -179,7 +187,7 @@ instance.prototype.send = function(cmd) {
 		self.init_tcp(function () {
 			self.connect_time = Date.now();
 
-			self.socket.write(cmd + "\r");
+			self.socket.write(self.passwordstring + cmd + "\r");
 		});
 	}
 };
@@ -225,14 +233,34 @@ instance.prototype.actions = function(system) {
 		'shutterOpen':    { label: 'Open Shutter' },
 		'shutterClose':   { label: 'Close Shutter' },
 		'freeze':         { label: 'Freeze Input' },
-		'unfreeze':       { label: 'Unfreeze Input' }
-
+		'unfreeze':       { label: 'Unfreeze Input' },
+		'inputToggle': {
+			label: 'Toggle Input',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Select input',
+					id: 'inputNum',
+					default: '31',
+					choices: [
+						{ id: '11', label: 'RGB1'},
+						{ id: '12', label: 'RGB2' },
+						{ id: '31', label: 'DVI-D'},
+						{ id: '32', label: 'HDMI' },
+						{ id: '33', label: 'Digital link' },
+						{ id: '34', label: 'SDI1' },
+						{ id: '35', label: 'SDI2' }
+					]
+				}
+			]
+		}
 	});
 };
 
 instance.prototype.action = function(action) {
 	var self = this;
 	var id = action.action;
+	var opt = action.options;
 	var cmd
 
 	switch (action.action){
@@ -259,6 +287,10 @@ instance.prototype.action = function(action) {
 
 		case 'unfreeze':
 			cmd = '%2frez 0';
+			break;
+
+		case 'inputToggle':
+			cmd = '%1inpt ' + opt.inputNum;
 			break;
 
 	};
