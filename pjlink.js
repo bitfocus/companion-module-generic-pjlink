@@ -234,8 +234,8 @@ instance.prototype.actions = function(system) {
 		'shutterClose':   { label: 'Close Shutter' },
 		'freeze':         { label: 'Freeze Input' },
 		'unfreeze':       { label: 'Unfreeze Input' },
-		'inputToggle': {
-			label: 'Toggle Input',
+		'inputSwitch': {
+			label: 'Switch Input',
 			options: [
 				{
 					type: 'dropdown',
@@ -289,7 +289,7 @@ instance.prototype.action = function(action) {
 			cmd = '%2frez 0';
 			break;
 
-		case 'inputToggle':
+		case 'inputSwitch':
 			cmd = '%1inpt ' + opt.inputNum;
 			break;
 
