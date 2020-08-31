@@ -128,7 +128,7 @@ instance.prototype.init_tcp = function(cb) {
 				var hasher = crypto.createHash('md5');
 				var hex = hasher.update(digest, 'utf-8').digest('hex');
 				// transmit the authentication hash and a pjlink command
-				self.socket.write(hex + "%1powr ?\r");
+				self.socket.write(hex + "%1POWR ?\r");
 
 				// Shoot and forget, by protocol definition :/
 				if (typeof cb == 'function') {
@@ -266,31 +266,31 @@ instance.prototype.action = function(action) {
 	switch (action.action){
 
 		case 'powerOn':
-			cmd = '%1powr 1';
+			cmd = '%1POWR 1';
 			break;
 
 		case 'powerOff':
-			cmd = '%1powr 0';
+			cmd = '%1POWR 0';
 			break;
 
 		case 'shutterOpen':
-			cmd = '%1avmt 30';
+			cmd = '%1AVMT 30';
 			break;
 
 		case 'shutterClose':
-			cmd = '%1avmt 31';
+			cmd = '%1AVMT 31';
 			break;
 
 		case 'freeze':
-			cmd = '%2frez 1';
+			cmd = '%2FREZ 1';
 			break;
 
 		case 'unfreeze':
-			cmd = '%2frez 0';
+			cmd = '%2FREZ 0';
 			break;
 
 		case 'inputToggle':
-			cmd = '%1inpt ' + opt.inputNum;
+			cmd = '%1INPT ' + opt.inputNum;
 			break;
 
 	};
