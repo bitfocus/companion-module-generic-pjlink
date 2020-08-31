@@ -235,7 +235,7 @@ instance.prototype.actions = function(system) {
 		'freeze':         { label: 'Freeze Input' },
 		'unfreeze':       { label: 'Unfreeze Input' },
 		'inputToggle': {
-			label: 'Toggle Input',
+			label: 'Switch Input',
 			options: [
 				{
 					type: 'dropdown',
