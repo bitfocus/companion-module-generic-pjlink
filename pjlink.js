@@ -31,7 +31,8 @@ instance.prototype.init = function() {
 	self.commands = [];
 
 	self.status(self.STATUS_UNKNOWN, 'Connecting');
-	
+	self.init_tcp();
+
 };
 
 instance.prototype.init_tcp = function(cb) {
@@ -99,16 +100,6 @@ instance.prototype.init_tcp = function(cb) {
 
 			debug('PJLINK: < ' + data);
 
-			if (data.match(/^PJLINK 0/)) {
-				debug('Projector does not need password');
-				self.passwordstring = '';
-
-				// no auth
-				if (typeof cb == 'function') {
-					cb();
-				}
-				return;
-			}
 
 			if (data.match(/^PJLINK ERRA/)) {
 				debug('Password not accepted');
@@ -120,6 +111,16 @@ instance.prototype.init_tcp = function(cb) {
 				self.socket.destroy();
 				delete self.socket;
 				return;
+			}
+
+			if (data.match(/^PJLINK 0/)) {
+				debug('Projector does not need password');
+				self.passwordstring = '';
+
+				// no auth
+				if (typeof cb == 'function') {
+					cb();
+				}
 			}
 
 			var match;
