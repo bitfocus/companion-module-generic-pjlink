@@ -23,6 +23,21 @@ const CONFIG_POWER_STATE = [
 	{ id: '3', label: 'Warm-up' },
 ]
 
+const CONFIG_ERRORS = [
+	{ id: 'errorFan', label: 'Fan' },
+	{ id: 'errorLamp', label: 'Lamp' },
+	{ id: 'errorTemp', label: 'Temp' },
+	{ id: 'errorCover', label: 'Cover' },
+	{ id: 'errorFilter', label: 'Filter' },
+	{ id: 'errorOther', label: 'Other' },
+]
+
+const CONFIG_ERROR_STATE = [
+	{ id: '0', label: 'No Error' },
+	{ id: '1', label: 'Warning' },
+	{ id: '2', label: 'Error' },
+]
+
 function instance(system, id, config) {
 	var self = this
 
@@ -158,21 +173,18 @@ instance.prototype.init_tcp = function (cb) {
 				self.powerState = match[1]
 				self.setVariable('powerState', CONFIG_POWER_STATE.find((o) => o.id == self.powerState)?.label)
 				self.checkFeedbacks('powerState')
-				//debug('--- self.powerState=', self.powerState)
 			}
 
 			if ((match = data.match(/^%2INPT=(\d+)/))) {
 				self.inputNum = match[1]
 				self.setVariable('projectorInput', CONFIG_INPUTS.find((o) => o.id == self.inputNum)?.label)
 				self.checkFeedbacks('projectorInput')
-				//debug('--- self.inputNum =', self.inputNum)
 			}
 
 			if ((match = data.match(/^%1LAMP=(\d+)/))) {
 				self.lampHour = match[1]
 				self.setVariable('lampHour', self.lampHour)
 				self.checkFeedbacks('lampHour')
-				//debug('--- self.lampHour =', self.lampHour)
 			}
 
 			if ((match = data.match(/^%2IRES=(\d+)x(\d+)/))) {
@@ -180,7 +192,22 @@ instance.prototype.init_tcp = function (cb) {
 				self.inputVertRes = match[2]
 				self.setVariable('inputHorzRes', self.inputHorzRes)
 				self.setVariable('inputVertRes', self.inputVertRes)
-				debug('--- self.inputResolution =', self.inputHorzRes,'x',self.inputVertRes)
+			}
+
+			if ((match = data.match(/^%1ERST=(\d)(\d)(\d)(\d)(\d)(\d)/))) {
+				self.errorFan = match[1]
+				self.errorLamp = match[2]
+				self.errorTemp = match[3]
+				self.errorCover = match[4]
+				self.errorFilter = match[5]
+				self.errorOther = match[6]
+				self.setVariable('errorFan', CONFIG_ERROR_STATE.find((o) => o.id == self.errorFan)?.label)
+				self.setVariable('errorLamp', CONFIG_ERROR_STATE.find((o) => o.id == self.errorLamp)?.label)
+				self.setVariable('errorTemp', CONFIG_ERROR_STATE.find((o) => o.id == self.errorTemp)?.label)
+				self.setVariable('errorCover', CONFIG_ERROR_STATE.find((o) => o.id == self.errorCover)?.label)
+				self.setVariable('errorFilter', CONFIG_ERROR_STATE.find((o) => o.id == self.errorFilter)?.label)
+				self.setVariable('errorOther', CONFIG_ERROR_STATE.find((o) => o.id == self.errorOther)?.label)
+				self.checkFeedbacks('errors')
 			}
 
 			if ((match = data.match(/^PJLINK 1 (\S+)/))) {
@@ -365,6 +392,36 @@ instance.prototype.init_variables = function () {
 	var variables = []
 
 	variables.push({
+		label: 'Error Status - Fan',
+		name: 'errorFan',
+	})
+
+	variables.push({
+		label: 'Error Status - Lamp',
+		name: 'errorLamp',
+	})
+
+	variables.push({
+		label: 'Error Status - Temp',
+		name: 'errorTemp',
+	})
+
+	variables.push({
+		label: 'Error Status - Cover',
+		name: 'errorCover',
+	})
+
+	variables.push({
+		label: 'Error Status - Filter',
+		name: 'errorFilter',
+	})
+
+	variables.push({
+		label: 'Error Status - Other',
+		name: 'errorOther',
+	})
+
+	variables.push({
 		label: 'Input Horizontal Resolution',
 		name: 'inputHorzRes',
 	})
@@ -373,7 +430,7 @@ instance.prototype.init_variables = function () {
 		label: 'Input Vertical Resolution',
 		name: 'inputVertRes',
 	})
-	
+
 	variables.push({
 		label: 'Lamp Hours',
 		name: 'lampHour',
@@ -453,6 +510,32 @@ instance.prototype.init_feedbacks = function () {
 		],
 	}
 
+	feedbacks['errors'] = {
+		type: 'boolean',
+		label: 'Change colors based on Error status',
+		description: 'Change colors based on Error status',
+		style: {
+			color: self.rgb(255, 255, 255),
+			bgcolor: self.rgb(200, 0, 0),
+		},
+		options: [
+			{
+				type: 'dropdown',
+				label: 'Error',
+				id: 'error',
+				default: 'errorFan',
+				choices: CONFIG_ERRORS,
+			},
+			{
+				type: 'dropdown',
+				label: 'Status',
+				id: 'errorState',
+				default: '0',
+				choices: CONFIG_ERROR_STATE,
+			},
+		],
+	}
+
 	self.setFeedbackDefinitions(feedbacks)
 }
 
@@ -477,6 +560,41 @@ instance.prototype.feedback = function (feedback) {
 		}
 	}
 
+	if (feedback.type === 'errors') {
+		switch (feedback.options.error) {
+			case 'errorFan':
+				if (self.errorFan === feedback.options.errorState) {
+					return true
+				}
+				break
+			case 'errorLamp':
+				if (self.errorLamp === feedback.options.errorState) {
+					return true
+				}
+				break
+			case 'errorTemp':
+				if (self.errorTemp === feedback.options.errorState) {
+					return true
+				}
+				break
+			case 'errorCover':
+				if (self.errorCover === feedback.options.errorState) {
+					return true
+				}
+				break
+			case 'errorFilter':
+				if (self.errorFilter === feedback.options.errorState) {
+					return true
+				}
+				break
+			case 'errorOther':
+				if (self.errorFilter === feedback.options.errorState) {
+					return true
+				}
+				break
+		}
+	}
+
 	return false
 }
 
@@ -491,6 +609,8 @@ instance.prototype.poll = function () {
 	self.send('%1LAMP ?')
 	//Query Input Resolution
 	self.send('%2IRES ?')
+	//Query Error Status
+	self.send('%1ERST ?')
 }
 
 instance_skel.extendedBy(instance)
