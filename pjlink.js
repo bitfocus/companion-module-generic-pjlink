@@ -4,6 +4,25 @@ var crypto = require('crypto')
 var debug
 var log
 
+const CONFIG_INPUTS = [
+	{ id: '11', label: 'RGB1' },
+	{ id: '12', label: 'RGB2' },
+	{ id: '31', label: 'DVI-D' },
+	{ id: '32', label: 'HDMI' },
+	{ id: '33', label: 'Digital link' },
+	{ id: '34', label: 'SDI1' },
+	{ id: '35', label: 'SDI2' },
+	{ id: '52', label: 'LAN' },
+	{ id: '56', label: 'HDBaseT' },
+]
+
+const CONFIG_POWER_STATE = [
+	{ id: '0', label: 'Off' },
+	{ id: '1', label: 'On' },
+	{ id: '2', label: 'Cooling' },
+	{ id: '3', label: 'Warm-up' },
+]
+
 function instance(system, id, config) {
 	var self = this
 
@@ -64,7 +83,7 @@ instance.prototype.init_tcp = function (cb) {
 		self.socket = new net.Socket()
 		self.socket.setNoDelay(true)
 
-		self.poll_interval = setInterval(self.poll.bind(self),3000) //ms for poll
+		self.poll_interval = setInterval(self.poll.bind(self), 3000) //ms for poll
 		self.poll()
 
 		self.socket.on('error', function (err) {
@@ -136,18 +155,17 @@ instance.prototype.init_tcp = function (cb) {
 			}
 
 			if ((match = data.match(/^%1POWR.(\d)/))) {
-				switch (match[1]) {
-					case '0':
-						self.setVariable('powerState', 'Off')
-						self.powerState ='0'
-						break
-					case '1':
-						self.setVariable('powerState', 'On')
-						self.powerState = '1'
-						break
-				}
-				debug('--- self.powerState=',self.powerState)
+				self.powerState = match[1]
+				self.setVariable('powerState', CONFIG_INPUTS.find((o) => o.id == self.powerState)?.label)
 				self.checkFeedbacks('powerState')
+				//debug('--- self.powerState=', self.powerState)
+			}
+
+			if ((match = data.match(/^%2INPT=(\d.)/))) {
+				self.inputNum = match[1]
+				self.setVariable('projectorInput', CONFIG_POWER_STATE.find((o) => o.id == self.inputNum)?.label)
+				self.checkFeedbacks('projectorInput')
+				//debug('--- self.inputNum =', self.inputNum)
 			}
 
 			if ((match = data.match(/^PJLINK 1 (\S+)/))) {
@@ -270,15 +288,7 @@ instance.prototype.actions = function (system) {
 					label: 'Select input',
 					id: 'inputNum',
 					default: '31',
-					choices: [
-						{ id: '11', label: 'RGB1' },
-						{ id: '12', label: 'RGB2' },
-						{ id: '31', label: 'DVI-D' },
-						{ id: '32', label: 'HDMI' },
-						{ id: '33', label: 'Digital link' },
-						{ id: '34', label: 'SDI1' },
-						{ id: '35', label: 'SDI2' },
-					],
+					choices: CONFIG_INPUTS,
 				},
 			],
 		},
@@ -344,12 +354,36 @@ instance.prototype.init_variables = function () {
 		name: 'powerState',
 	})
 
+	variables.push({
+		label: 'Projector Input',
+		name: 'projectorInput',
+	})
+
 	self.setVariableDefinitions(variables)
 }
 
 instance.prototype.init_feedbacks = function () {
 	var self = this
 	var feedbacks = {}
+
+	feedbacks['projectorInput'] = {
+		type: 'boolean',
+		label: 'Change colors based on Projector Input',
+		description: 'Change colors based on Projector Input',
+		style: {
+			color: self.rgb(255, 255, 255),
+			bgcolor: self.rgb(0, 200, 0),
+		},
+		options: [
+			{
+				type: 'dropdown',
+				label: 'Select input',
+				id: 'inputNum',
+				default: '31',
+				choices: CONFIG_INPUTS,
+			},
+		],
+	}
 
 	feedbacks['powerState'] = {
 		type: 'boolean',
@@ -365,13 +399,11 @@ instance.prototype.init_feedbacks = function () {
 				label: 'Status',
 				id: 'powerState',
 				default: 'Off',
-				choices: [
-					{ id: '0', label: 'Off' },
-					{ id: '1', label: 'On' },
-				],
+				choices: CONFIG_POWER_STATE,
 			},
 		],
 	}
+
 	self.setFeedbackDefinitions(feedbacks)
 }
 
@@ -384,14 +416,22 @@ instance.prototype.feedback = function (feedback) {
 		}
 	}
 
+	if (feedback.type === 'projectorInput') {
+		if (self.inputNum === feedback.options.inputNum) {
+			return true
+		}
+	}
+
 	return false
 }
 
 instance.prototype.poll = function () {
 	var self = this
+
 	//Query Power
 	self.send('%1POWR ?')
-
+	//Query Input
+	self.send('%2INPT ?')
 }
 
 instance_skel.extendedBy(instance)
