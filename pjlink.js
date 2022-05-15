@@ -588,7 +588,7 @@ instance.prototype.feedback = function (feedback) {
 				}
 				break
 			case 'errorOther':
-				if (self.errorFilter === feedback.options.errorState) {
+				if (self.errorOther === feedback.options.errorState) {
 					return true
 				}
 				break
