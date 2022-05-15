@@ -156,16 +156,31 @@ instance.prototype.init_tcp = function (cb) {
 
 			if ((match = data.match(/^%1POWR.(\d)/))) {
 				self.powerState = match[1]
-				self.setVariable('powerState', CONFIG_INPUTS.find((o) => o.id == self.powerState)?.label)
+				self.setVariable('powerState', CONFIG_POWER_STATE.find((o) => o.id == self.powerState)?.label)
 				self.checkFeedbacks('powerState')
 				//debug('--- self.powerState=', self.powerState)
 			}
 
-			if ((match = data.match(/^%2INPT=(\d.)/))) {
+			if ((match = data.match(/^%2INPT=(\d+)/))) {
 				self.inputNum = match[1]
-				self.setVariable('projectorInput', CONFIG_POWER_STATE.find((o) => o.id == self.inputNum)?.label)
+				self.setVariable('projectorInput', CONFIG_INPUTS.find((o) => o.id == self.inputNum)?.label)
 				self.checkFeedbacks('projectorInput')
 				//debug('--- self.inputNum =', self.inputNum)
+			}
+
+			if ((match = data.match(/^%1LAMP=(\d+)/))) {
+				self.lampHour = match[1]
+				self.setVariable('lampHour', self.lampHour)
+				self.checkFeedbacks('lampHour')
+				//debug('--- self.lampHour =', self.lampHour)
+			}
+
+			if ((match = data.match(/^%2IRES=(\d+)x(\d+)/))) {
+				self.inputHorzRes = match[1]
+				self.inputVertRes = match[2]
+				self.setVariable('inputHorzRes', self.inputHorzRes)
+				self.setVariable('inputVertRes', self.inputVertRes)
+				debug('--- self.inputResolution =', self.inputHorzRes,'x',self.inputVertRes)
 			}
 
 			if ((match = data.match(/^PJLINK 1 (\S+)/))) {
@@ -350,6 +365,21 @@ instance.prototype.init_variables = function () {
 	var variables = []
 
 	variables.push({
+		label: 'Input Horizontal Resolution',
+		name: 'inputHorzRes',
+	})
+
+	variables.push({
+		label: 'Input Vertical Resolution',
+		name: 'inputVertRes',
+	})
+	
+	variables.push({
+		label: 'Lamp Hours',
+		name: 'lampHour',
+	})
+
+	variables.push({
 		label: 'Projector Power Status',
 		name: 'powerState',
 	})
@@ -404,6 +434,25 @@ instance.prototype.init_feedbacks = function () {
 		],
 	}
 
+	feedbacks['lampHour'] = {
+		type: 'boolean',
+		label: 'Change colors based on Lamp hours greater than hours',
+		description: 'Change colors based on Lamp hours greater than hours',
+		style: {
+			color: self.rgb(255, 255, 255),
+			bgcolor: self.rgb(0, 200, 0),
+		},
+		options: [
+			{
+				type: 'number',
+				label: 'Greater than Hours',
+				id: 'lampHour',
+				default: 10000,
+				min: 0,
+			},
+		],
+	}
+
 	self.setFeedbackDefinitions(feedbacks)
 }
 
@@ -422,6 +471,12 @@ instance.prototype.feedback = function (feedback) {
 		}
 	}
 
+	if (feedback.type === 'lampHour') {
+		if (self.lampHour > feedback.options.lampHour) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -432,6 +487,10 @@ instance.prototype.poll = function () {
 	self.send('%1POWR ?')
 	//Query Input
 	self.send('%2INPT ?')
+	//Query Lamp
+	self.send('%1LAMP ?')
+	//Query Input Resolution
+	self.send('%2IRES ?')
 }
 
 instance_skel.extendedBy(instance)
