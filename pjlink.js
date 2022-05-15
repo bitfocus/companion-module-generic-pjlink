@@ -4,25 +4,6 @@ var crypto = require('crypto')
 var debug
 var log
 
-const CONFIG_INPUTS = [
-	{ id: '11', label: 'RGB1' },
-	{ id: '12', label: 'RGB2' },
-	{ id: '31', label: 'DVI-D' },
-	{ id: '32', label: 'HDMI' },
-	{ id: '33', label: 'Digital link' },
-	{ id: '34', label: 'SDI1' },
-	{ id: '35', label: 'SDI2' },
-	{ id: '52', label: 'LAN' },
-	{ id: '56', label: 'HDBaseT' },
-]
-
-const CONFIG_POWER_STATE = [
-	{ id: '0', label: 'Off' },
-	{ id: '1', label: 'On' },
-	{ id: '2', label: 'Cooling' },
-	{ id: '3', label: 'Warm-up' },
-]
-
 const CONFIG_ERRORS = [
 	{ id: 'errorFan', label: 'Fan' },
 	{ id: 'errorLamp', label: 'Lamp' },
@@ -36,6 +17,37 @@ const CONFIG_ERROR_STATE = [
 	{ id: '0', label: 'No Error' },
 	{ id: '1', label: 'Warning' },
 	{ id: '2', label: 'Error' },
+]
+
+const CONFIG_FREEZE_STATE = [
+	{ id: '0', label: 'Off' },
+	{ id: '1', label: 'On' },
+]
+
+const CONFIG_INPUTS = [
+	{ id: '11', label: 'RGB1' },
+	{ id: '12', label: 'RGB2' },
+	{ id: '31', label: 'DVI-D' },
+	{ id: '32', label: 'HDMI' },
+	{ id: '33', label: 'Digital link' },
+	{ id: '34', label: 'SDI1' },
+	{ id: '35', label: 'SDI2' },
+	{ id: '52', label: 'LAN' },
+	{ id: '56', label: 'HDBaseT' },
+]
+
+const CONFIG_MUTE_STATE = [
+	{ id: '11', label: 'Video mute On' },
+	{ id: '21', label: 'Audio Mute On' },
+	{ id: '30', label: 'A/V mute Off' },
+	{ id: '31', label: 'A/V mute On' },
+]
+
+const CONFIG_POWER_STATE = [
+	{ id: '0', label: 'Off' },
+	{ id: '1', label: 'On' },
+	{ id: '2', label: 'Cooling' },
+	{ id: '3', label: 'Warm-up' },
 ]
 
 function instance(system, id, config) {
@@ -208,6 +220,18 @@ instance.prototype.init_tcp = function (cb) {
 				self.setVariable('errorFilter', CONFIG_ERROR_STATE.find((o) => o.id == self.errorFilter)?.label)
 				self.setVariable('errorOther', CONFIG_ERROR_STATE.find((o) => o.id == self.errorOther)?.label)
 				self.checkFeedbacks('errors')
+			}
+
+			if ((match = data.match(/^%1AVMT=(\d+)/))) {
+				self.muteState = match[1]
+				self.setVariable('muteState', CONFIG_INPUTS.find((o) => o.id == self.muteState)?.label)
+				self.checkFeedbacks('muteState')
+			}
+
+			if ((match = data.match(/^%2FREZ=(\d+)/))) {
+				self.freezeState = match[1]
+				self.setVariable('freezeState', CONFIG_FREEZE_STATE.find((o) => o.id == self.freezeState)?.label)
+				self.checkFeedbacks('freezeState')
 			}
 
 			if ((match = data.match(/^PJLINK 1 (\S+)/))) {
@@ -422,6 +446,11 @@ instance.prototype.init_variables = function () {
 	})
 
 	variables.push({
+		label: 'Freeze Status',
+		name: 'freezeState',
+	})
+
+	variables.push({
 		label: 'Input Horizontal Resolution',
 		name: 'inputHorzRes',
 	})
@@ -434,6 +463,11 @@ instance.prototype.init_variables = function () {
 	variables.push({
 		label: 'Lamp Hours',
 		name: 'lampHour',
+	})
+
+	variables.push({
+		label: 'Mute Status',
+		name: 'muteState',
 	})
 
 	variables.push({
@@ -452,6 +486,89 @@ instance.prototype.init_variables = function () {
 instance.prototype.init_feedbacks = function () {
 	var self = this
 	var feedbacks = {}
+
+	feedbacks['errors'] = {
+		type: 'boolean',
+		label: 'Change colors based on Error status',
+		description: 'Change colors based on Error status',
+		style: {
+			color: self.rgb(255, 255, 255),
+			bgcolor: self.rgb(200, 0, 0),
+		},
+		options: [
+			{
+				type: 'dropdown',
+				label: 'Error',
+				id: 'error',
+				default: 'errorFan',
+				choices: CONFIG_ERRORS,
+			},
+			{
+				type: 'dropdown',
+				label: 'Status',
+				id: 'errorState',
+				default: '0',
+				choices: CONFIG_ERROR_STATE,
+			},
+		],
+	}
+
+	feedbacks['freezeState'] = {
+		type: 'boolean',
+		label: 'Change colors based on Freeze status',
+		description: 'Change colors based on Freeze status',
+		style: {
+			color: self.rgb(255, 255, 255),
+			bgcolor: self.rgb(0, 200, 0),
+		},
+		options: [
+			{
+				type: 'dropdown',
+				label: 'Status',
+				id: 'freezeState',
+				default: '0',
+				choices: CONFIG_FREEZE_STATE,
+			},
+		],
+	}
+
+	feedbacks['lampHour'] = {
+		type: 'boolean',
+		label: 'Change colors based on Lamp hours greater than hours',
+		description: 'Change colors based on Lamp hours greater than hours',
+		style: {
+			color: self.rgb(255, 255, 255),
+			bgcolor: self.rgb(0, 200, 0),
+		},
+		options: [
+			{
+				type: 'number',
+				label: 'Greater than Hours',
+				id: 'lampHour',
+				default: 10000,
+				min: 0,
+			},
+		],
+	}
+
+	feedbacks['muteState'] = {
+		type: 'boolean',
+		label: 'Change colors based on Mute status',
+		description: 'Change colors based on Mute status',
+		style: {
+			color: self.rgb(255, 255, 255),
+			bgcolor: self.rgb(0, 200, 0),
+		},
+		options: [
+			{
+				type: 'dropdown',
+				label: 'Status',
+				id: 'muteState',
+				default: '31',
+				choices: CONFIG_MUTE_STATE,
+			},
+		],
+	}
 
 	feedbacks['projectorInput'] = {
 		type: 'boolean',
@@ -491,74 +608,11 @@ instance.prototype.init_feedbacks = function () {
 		],
 	}
 
-	feedbacks['lampHour'] = {
-		type: 'boolean',
-		label: 'Change colors based on Lamp hours greater than hours',
-		description: 'Change colors based on Lamp hours greater than hours',
-		style: {
-			color: self.rgb(255, 255, 255),
-			bgcolor: self.rgb(0, 200, 0),
-		},
-		options: [
-			{
-				type: 'number',
-				label: 'Greater than Hours',
-				id: 'lampHour',
-				default: 10000,
-				min: 0,
-			},
-		],
-	}
-
-	feedbacks['errors'] = {
-		type: 'boolean',
-		label: 'Change colors based on Error status',
-		description: 'Change colors based on Error status',
-		style: {
-			color: self.rgb(255, 255, 255),
-			bgcolor: self.rgb(200, 0, 0),
-		},
-		options: [
-			{
-				type: 'dropdown',
-				label: 'Error',
-				id: 'error',
-				default: 'errorFan',
-				choices: CONFIG_ERRORS,
-			},
-			{
-				type: 'dropdown',
-				label: 'Status',
-				id: 'errorState',
-				default: '0',
-				choices: CONFIG_ERROR_STATE,
-			},
-		],
-	}
-
 	self.setFeedbackDefinitions(feedbacks)
 }
 
 instance.prototype.feedback = function (feedback) {
 	var self = this
-
-	if (feedback.type === 'powerState') {
-		if (self.powerState === feedback.options.powerState) {
-			return true
-		}
-	}
-
-	if (feedback.type === 'projectorInput') {
-		if (self.inputNum === feedback.options.inputNum) {
-			return true
-		}
-	}
-
-	if (feedback.type === 'lampHour') {
-		if (self.lampHour > feedback.options.lampHour) {
-			return true
-		}
-	}
 
 	if (feedback.type === 'errors') {
 		switch (feedback.options.error) {
@@ -595,6 +649,36 @@ instance.prototype.feedback = function (feedback) {
 		}
 	}
 
+	if (feedback.type === 'freezeState') {
+		if (self.freezeState === feedback.options.freezeState) {
+			return true
+		}
+	}
+
+	if (feedback.type === 'lampHour') {
+		if (self.lampHour > feedback.options.lampHour) {
+			return true
+		}
+	}
+
+	if (feedback.type === 'muteState') {
+		if (self.muteState === feedback.options.muteState) {
+			return true
+		}
+	}
+
+	if (feedback.type === 'powerState') {
+		if (self.powerState === feedback.options.powerState) {
+			return true
+		}
+	}
+
+	if (feedback.type === 'projectorInput') {
+		if (self.inputNum === feedback.options.inputNum) {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -611,6 +695,10 @@ instance.prototype.poll = function () {
 	self.send('%2IRES ?')
 	//Query Error Status
 	self.send('%1ERST ?')
+	//Query Mute Status
+	self.send('%1AVMT ?')
+	//Query Freeze Status
+	self.send('%2FREZ ?')
 }
 
 instance_skel.extendedBy(instance)

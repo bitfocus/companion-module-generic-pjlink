@@ -12,10 +12,20 @@
 
 **Available variables for PJLink**
 
+- Error Status
+- Freeze Status
+- Input Horizontal Resolution
+- Input Vertical Resolution
+- Lamp Hour
+- Mute Status
 - Power Status
-- Projector Input
+- Projector Inputt
 
 **Available feedback for PJLink**
 
+- Error Status
+- Freeze Status
+- Lamp Hour
+- Mute Status
 - Power Status
 - Projector Input
