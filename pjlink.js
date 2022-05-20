@@ -77,6 +77,8 @@ instance.prototype.init = function () {
 	log = self.log
 
 	self.commands = []
+	self.inputNames = []
+	self.projectorClass = 'Class1'
 
 	self.status(self.STATUS_UNKNOWN, 'Connecting')
 	self.init_tcp()
@@ -110,7 +112,8 @@ instance.prototype.init_tcp = function (cb) {
 		self.socket = new net.Socket()
 		self.socket.setNoDelay(true)
 
-		self.poll_interval = setInterval(self.poll.bind(self), 3000) //ms for poll
+		self.pollTime = self.config.pollTime * 1000
+		self.poll_interval = setInterval(self.poll.bind(self), self.pollTime) //ms for poll
 		self.poll()
 
 		self.socket.on('error', function (err) {
@@ -181,6 +184,17 @@ instance.prototype.init_tcp = function (cb) {
 				}
 			}
 
+			if ((match = data.match(/^%1CLSS=(\d)/))) {
+				self.projectorClass = match[1]
+				self.setVariable('projectorClass', 'Class' + self.projectorClass)
+				//self.checkFeedbacks('projectorClass')
+			}
+
+			if ((match = data.match(/^%1INST=(.+)/))) {
+				self.availInputs = match[1].split(' ')
+				self.getInputName(self.availInputs)
+			}
+
 			if ((match = data.match(/^%1POWR.(\d)/))) {
 				self.powerState = match[1]
 				self.setVariable('powerState', CONFIG_POWER_STATE.find((o) => o.id == self.powerState)?.label)
@@ -224,7 +238,7 @@ instance.prototype.init_tcp = function (cb) {
 
 			if ((match = data.match(/^%1AVMT=(\d+)/))) {
 				self.muteState = match[1]
-				self.setVariable('muteState', CONFIG_INPUTS.find((o) => o.id == self.muteState)?.label)
+				self.setVariable('muteState', CONFIG_MUTE_STATE.find((o) => o.id == self.muteState)?.label)
 				self.checkFeedbacks('muteState')
 			}
 
@@ -290,6 +304,8 @@ instance.prototype.init_tcp = function (cb) {
 instance.prototype.send = function (cmd) {
 	var self = this
 
+	debug('PJLINK: > ', cmd)
+
 	if (self.connecting) {
 		self.commands.push(cmd)
 	} else {
@@ -317,6 +333,12 @@ instance.prototype.config_fields = function () {
 			id: 'password',
 			label: 'PJLink password (empty for none)',
 			width: 6,
+		},
+		{
+			type: 'number',
+			id: 'pollTime',
+			label: 'Enter polling time in seconds',
+			default: 10,
 		},
 	]
 }
@@ -414,6 +436,11 @@ instance.prototype.action = function (action) {
 instance.prototype.init_variables = function () {
 	var self = this
 	var variables = []
+
+	variables.push({
+		label: 'Projector Class',
+		name: 'projectorClass',
+	})
 
 	variables.push({
 		label: 'Error Status - Fan',
@@ -685,20 +712,37 @@ instance.prototype.feedback = function (feedback) {
 instance.prototype.poll = function () {
 	var self = this
 
+	//Query Projector Class
+	self.send('%1CLSS ?')
+
+	//Query Input List
+	//self.projectorClass === '2' ? self.send('%2INST ?') :
+	self.send('%1INST ?')
+
 	//Query Power
 	self.send('%1POWR ?')
-	//Query Input
-	self.send('%2INPT ?')
 	//Query Lamp
 	self.send('%1LAMP ?')
-	//Query Input Resolution
-	self.send('%2IRES ?')
 	//Query Error Status
 	self.send('%1ERST ?')
 	//Query Mute Status
 	self.send('%1AVMT ?')
+
+	//Class 2 Queries
+	//Query Input Resolution
+	self.send('%2IRES ?')
+	//Query Input
+	self.send('%2INPT ?')
 	//Query Freeze Status
 	self.send('%2FREZ ?')
+}
+
+instance.prototype.getInputName = function (inputs) {
+	var self = this
+	inputs.forEach((element) => {
+		debug('sending %2INNM ?', element, 'to', self.config.host)
+		self.send('%2INNM ?' + element)
+	})
 }
 
 instance_skel.extendedBy(instance)
