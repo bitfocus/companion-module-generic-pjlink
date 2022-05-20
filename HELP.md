@@ -19,7 +19,7 @@
 - Lamp Hour
 - Mute Status
 - Power Status
-- Projector Inputt
+- Projector Input
 
 **Available feedback for PJLink**
 
