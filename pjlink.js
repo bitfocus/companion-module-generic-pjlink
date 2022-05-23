@@ -1,6 +1,7 @@
 var net = require('net')
 var instance_skel = require('../../instance_skel')
 var crypto = require('crypto')
+const upgradescripts = require('./upgrades')
 var debug
 var log
 
@@ -55,10 +56,26 @@ function instance(system, id, config) {
 
 	// super-constructor
 	instance_skel.apply(this, arguments)
+	self.projector = []
+	self.projector.lamps = []
+
+	for (let i = 1; i <= 8; i++) {
+		self.projector.lamps.push({
+			lamp: i,
+			hours: '0',
+			on: 'off',
+		})
+	}
+
+	self.projector.inputNames = CONFIG_INPUTS
 
 	self.actions() // export actions
 
 	return self
+}
+
+instance.GetUpgradeScripts = function () {
+	return [upgradescripts.upgrade_choices]
 }
 
 instance.prototype.updateConfig = function (config) {
@@ -77,8 +94,7 @@ instance.prototype.init = function () {
 	log = self.log
 
 	self.commands = []
-	self.inputNames = []
-	self.projectorClass = 'Class1'
+	//self.projector.class = '1'
 
 	self.status(self.STATUS_UNKNOWN, 'Connecting')
 	self.init_tcp()
@@ -109,8 +125,11 @@ instance.prototype.init_tcp = function (cb) {
 	if (self.config.host) {
 		self.connecting = true
 		self.commands = []
+
 		self.socket = new net.Socket()
 		self.socket.setNoDelay(true)
+
+		self.getProjectorDetails()
 
 		self.pollTime = self.config.pollTime * 1000
 		self.poll_interval = setInterval(self.poll.bind(self), self.pollTime) //ms for poll
@@ -184,68 +203,179 @@ instance.prototype.init_tcp = function (cb) {
 				}
 			}
 
+			if ((match = data.match(/^(%(\d).+)=ERR(\d)/))) {
+				cmd = match[1]
+				projClass = match[2]
+				err = match[3]
+
+				switch (err) {
+					case '1':
+						{
+							errorText =
+								projClass === self.projector.class
+									? 'Undefined command: ' + cmd
+									: 'Command for different Project Class: ' + cmd
+							self.log('error', errorText)
+							debug('PJLINK ERROR: ', errorText)
+						}
+						break
+					case '2':
+						{
+							self.log('error', cmd + ' Out of parameter')
+							debug('PJLINK ERROR: ', cmd + ' Out of parameter')
+						}
+						break
+					case '3':
+						{
+							self.log('error', 'Unavailable time')
+							debug('PJLINK ERROR: Unavailable time')
+						}
+						break
+					case '4':
+						{
+							self.log('error', 'Projector/Display failure')
+							debug('PJLINK ERROR: Projector/Display failure')
+						}
+						break
+				}
+				return
+			}
+
 			if ((match = data.match(/^%1CLSS=(\d)/))) {
-				self.projectorClass = match[1]
-				self.setVariable('projectorClass', 'Class' + self.projectorClass)
+				self.projector.class = match[1]
+				self.setVariable('projectorClass', self.projector.class)
+				self.socket.emit('projectorClass')
 				//self.checkFeedbacks('projectorClass')
 			}
 
-			if ((match = data.match(/^%1INST=(.+)/))) {
-				self.availInputs = match[1].split(' ')
-				self.getInputName(self.availInputs)
+			if ((match = data.match(/^%1NAME=(.+)/))) {
+				self.projector.name = match[1]
+				self.setVariable('projectorName', self.projector.name)
 			}
 
-			if ((match = data.match(/^%1POWR.(\d)/))) {
-				self.powerState = match[1]
-				self.setVariable('powerState', CONFIG_POWER_STATE.find((o) => o.id == self.powerState)?.label)
+			if ((match = data.match(/^%1INF1=(.+)/))) {
+				self.projector.make = match[1]
+				self.setVariable('projectorMake', self.projector.make)
+			}
+
+			if ((match = data.match(/^%1INF2=(.+)/))) {
+				self.projector.model = match[1]
+				self.setVariable('projectorModel', self.projector.model)
+			}
+
+			if ((match = data.match(/^%1INFO=(.+)/))) {
+				self.projector.other = match[1]
+				self.setVariable('projectorOther', self.projector.other)
+			}
+
+			if ((match = data.match(/^%2RLMP=(.+)/))) {
+				self.projector.lampReplacement = match[1]
+				self.setVariable('lampReplacement', self.projector.lampReplacement)
+			}
+
+			if ((match = data.match(/^%1INST=(.+)/))) {
+				self.projector.availInputs = match[1].split(' ')
+			}
+
+			if ((match = data.match(/^%2INST=(.+)/))) {
+				self.projector.availInputs = match[1].split(' ')
+
+				self.getInputName(self.projector.availInputs)
+			}
+
+			if ((match = data.match(/^%2INNM=(.+)/))) {
+				if (!(match[1] === 'ERR1' || match[1] === 'ERR2' || match[1] === 'ERR3')) {
+					idx = self.projector.inputNames.findIndex((o) => o.label === null)
+					self.projector.inputNames[idx].label = match[1]
+					debug('---- Inputs are: ', self.projector.inputNames)
+				}
+			}
+
+			if ((match = data.match(/^%1POWR=(\d)/))) {
+				self.projector.powerState = match[1]
+				self.setVariable('powerState', CONFIG_POWER_STATE.find((o) => o.id == self.projector.powerState)?.label)
 				self.checkFeedbacks('powerState')
 			}
 
-			if ((match = data.match(/^%2INPT=(\d+)/))) {
-				self.inputNum = match[1]
-				self.setVariable('projectorInput', CONFIG_INPUTS.find((o) => o.id == self.inputNum)?.label)
+			if ((match = data.match(/^%\dINPT=(\d+)/))) {
+				self.projector.inputNum = match[1]
+				self.setVariable(
+					'projectorInput',
+					self.projector.inputNames.find((o) => o.id == self.projector.inputNum)?.label
+				)
 				self.checkFeedbacks('projectorInput')
 			}
 
-			if ((match = data.match(/^%1LAMP=(\d+)/))) {
-				self.lampHour = match[1]
-				self.setVariable('lampHour', self.lampHour)
+			if ((match = data.match(/^%1LAMP=(.+)/))) {
+				var response = match[1].match(/(\d+.\d)/g)
+				debug('----Lamp Hrs Repsonse', response)
+				response.forEach((element, index) => {
+					hours = element.split(' ')[0]
+					on = element.split(' ')[1] === '1' ? 'On' : 'Off'
+					self.projector.lamps[index] = { lamp: index + 1, hours: hours, on: on }
+				})
+				self.projector.lamps.forEach((element, index) => {
+					self.setVariable('lamp' + [index + 1] + 'Hrs', element.hours)
+					self.setVariable('lamp' + [index + 1] + 'On', element.on)
+				})
 				self.checkFeedbacks('lampHour')
 			}
 
 			if ((match = data.match(/^%2IRES=(\d+)x(\d+)/))) {
-				self.inputHorzRes = match[1]
-				self.inputVertRes = match[2]
-				self.setVariable('inputHorzRes', self.inputHorzRes)
-				self.setVariable('inputVertRes', self.inputVertRes)
+				self.projector.inputHorzRes = match[1]
+				self.projector.inputVertRes = match[2]
+				self.setVariable('inputHorzRes', self.projector.inputHorzRes)
+				self.setVariable('inputVertRes', self.projector.inputVertRes)
+			}
+
+			if ((match = data.match(/^%2RRES=(\d+)x(\d+)/))) {
+				self.projector.recHorzRes = match[1]
+				self.projector.recVertRes = match[2]
+				self.setVariable('recHorzRes', self.projector.recHorzRes)
+				self.setVariable('recVertRes', self.projector.recVertRes)
 			}
 
 			if ((match = data.match(/^%1ERST=(\d)(\d)(\d)(\d)(\d)(\d)/))) {
-				self.errorFan = match[1]
-				self.errorLamp = match[2]
-				self.errorTemp = match[3]
-				self.errorCover = match[4]
-				self.errorFilter = match[5]
-				self.errorOther = match[6]
-				self.setVariable('errorFan', CONFIG_ERROR_STATE.find((o) => o.id == self.errorFan)?.label)
-				self.setVariable('errorLamp', CONFIG_ERROR_STATE.find((o) => o.id == self.errorLamp)?.label)
-				self.setVariable('errorTemp', CONFIG_ERROR_STATE.find((o) => o.id == self.errorTemp)?.label)
-				self.setVariable('errorCover', CONFIG_ERROR_STATE.find((o) => o.id == self.errorCover)?.label)
-				self.setVariable('errorFilter', CONFIG_ERROR_STATE.find((o) => o.id == self.errorFilter)?.label)
-				self.setVariable('errorOther', CONFIG_ERROR_STATE.find((o) => o.id == self.errorOther)?.label)
+				self.projector.errorFan = match[1]
+				self.projector.errorLamp = match[2]
+				self.projector.errorTemp = match[3]
+				self.projector.errorCover = match[4]
+				self.projector.errorFilter = match[5]
+				self.projector.errorOther = match[6]
+				self.setVariable('errorFan', CONFIG_ERROR_STATE.find((o) => o.id == self.projector.errorFan)?.label)
+				self.setVariable('errorLamp', CONFIG_ERROR_STATE.find((o) => o.id == self.projector.errorLamp)?.label)
+				self.setVariable('errorTemp', CONFIG_ERROR_STATE.find((o) => o.id == self.projector.errorTemp)?.label)
+				self.setVariable('errorCover', CONFIG_ERROR_STATE.find((o) => o.id == self.projector.errorCover)?.label)
+				self.setVariable('errorFilter', CONFIG_ERROR_STATE.find((o) => o.id == self.projector.errorFilter)?.label)
+				self.setVariable('errorOther', CONFIG_ERROR_STATE.find((o) => o.id == self.projector.errorOther)?.label)
 				self.checkFeedbacks('errors')
 			}
 
 			if ((match = data.match(/^%1AVMT=(\d+)/))) {
-				self.muteState = match[1]
-				self.setVariable('muteState', CONFIG_MUTE_STATE.find((o) => o.id == self.muteState)?.label)
+				self.projector.muteState = match[1]
+				self.setVariable('muteState', CONFIG_MUTE_STATE.find((o) => o.id == self.projector.muteState)?.label)
 				self.checkFeedbacks('muteState')
 			}
 
 			if ((match = data.match(/^%2FREZ=(\d+)/))) {
-				self.freezeState = match[1]
-				self.setVariable('freezeState', CONFIG_FREEZE_STATE.find((o) => o.id == self.freezeState)?.label)
+				self.projector.freezeState = match[1]
+				self.setVariable('freezeState', CONFIG_FREEZE_STATE.find((o) => o.id == self.projector.freezeState)?.label)
 				self.checkFeedbacks('freezeState')
+			}
+
+			if ((match = data.match(/^%2SNUM=(.+)/))) {
+				self.projector.serialNumber = match[1]
+				self.setVariable('serialNumber', self.projector.serialNumber)
+			}
+
+			if ((match = data.match(/^%2SVER=(.+)/))) {
+				self.projector.softwareVer = match[1]
+				self.setVariable('softwareVer', self.projector.softwareVer)
+			}
+
+			if ((match = data.match(/^%2FILT=(.+)/))) {
+				self.projector.filterUsageTime = match[1]
+				self.setVariable('filterUsageTime', self.projector.filterUsageTime)
 			}
 
 			if ((match = data.match(/^PJLINK 1 (\S+)/))) {
@@ -362,25 +492,54 @@ instance.prototype.actions = function (system) {
 	var self = this
 
 	self.setActions({
-		powerOn: { label: 'Power On Projector' },
-		powerOff: { label: 'Power Off Projector' },
-		shutterOpen: { label: 'Open Shutter' },
-		shutterClose: { label: 'Close Shutter' },
-		freeze: { label: 'Freeze Input' },
-		unfreeze: { label: 'Unfreeze Input' },
+		powerState: {
+			label: 'Change Projector Power State',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Select Power State',
+					id: 'opt',
+					default: '1',
+					choices: CONFIG_POWER_STATE.slice(0, 2),
+				},
+			],
+		},
+		muteState: {
+			label: 'Change Projector Mute State ',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Select Mute State',
+					id: 'opt',
+					default: '30',
+					choices: CONFIG_MUTE_STATE,
+				},
+			],
+		},
+		freezeState: {
+			label: 'Change Projector Freeze State',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Select Mute State',
+					id: 'opt',
+					default: '0',
+					choices: CONFIG_FREEZE_STATE,
+				},
+			],
+		},
 		inputToggle: {
-			label: 'Switch Input',
+			label: 'Switch Projector Input',
 			options: [
 				{
 					type: 'dropdown',
 					label: 'Select input',
 					id: 'inputNum',
-					default: '31',
-					choices: CONFIG_INPUTS,
+					//default: self.projector.inputNames[0],
+					choices: self.projector.inputNames,
 				},
 			],
 		},
-		qryPower: { label: 'Query Power' },
 	})
 }
 
@@ -391,36 +550,20 @@ instance.prototype.action = function (action) {
 	var cmd
 
 	switch (action.action) {
-		case 'powerOn':
-			cmd = '%1POWR 1'
+		case 'powerState':
+			cmd = '%1POWR ' + opt.opt
 			break
 
-		case 'powerOff':
-			cmd = '%1POWR 0'
+		case 'muteState':
+			cmd = '%1AVMT ' + opt.opt
 			break
 
-		case 'shutterOpen':
-			cmd = '%1AVMT 30'
-			break
-
-		case 'shutterClose':
-			cmd = '%1AVMT 31'
-			break
-
-		case 'freeze':
-			cmd = '%2FREZ 1'
-			break
-
-		case 'unfreeze':
-			cmd = '%2FREZ 0'
+		case 'freezeState':
+			cmd = '%2FREZ ' + opt.opt
 			break
 
 		case 'inputToggle':
 			cmd = '%1INPT ' + opt.inputNum
-			break
-
-		case 'qryPower':
-			cmd = '%1POWR ?'
 			break
 	}
 
@@ -440,6 +583,26 @@ instance.prototype.init_variables = function () {
 	variables.push({
 		label: 'Projector Class',
 		name: 'projectorClass',
+	})
+
+	variables.push({
+		label: 'Projector Name',
+		name: 'projectorName',
+	})
+
+	variables.push({
+		label: 'Projector Manufacturer',
+		name: 'projectorMake',
+	})
+
+	variables.push({
+		label: 'Projector Product Name',
+		name: 'projectorModel',
+	})
+
+	variables.push({
+		label: 'Projector Other Info',
+		name: 'projectorOther',
 	})
 
 	variables.push({
@@ -483,13 +646,123 @@ instance.prototype.init_variables = function () {
 	})
 
 	variables.push({
+		label: 'Recommended Vertical Resolution',
+		name: 'recVertRes',
+	})
+
+	variables.push({
+		label: 'Recommended Horizontal Resolution',
+		name: 'recHorzRes',
+	})
+
+	variables.push({
 		label: 'Input Vertical Resolution',
 		name: 'inputVertRes',
 	})
 
 	variables.push({
-		label: 'Lamp Hours',
-		name: 'lampHour',
+		label: 'Lamp 1 Hours',
+		name: 'lamp1Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 2 Hours',
+		name: 'lamp2Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 3 Hours',
+		name: 'lamp3Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 4 Hours',
+		name: 'lamp4Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 5 Hours',
+		name: 'lamp5Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 6 Hours',
+		name: 'lamp6Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 7 Hours',
+		name: 'lamp7Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 8 Hours',
+		name: 'lamp8Hrs',
+	})
+
+	variables.push({
+		label: 'Lamp 1 On',
+		name: 'lamp1On',
+	})
+
+	variables.push({
+		label: 'Lamp 2 On',
+		name: 'lamp2On',
+	})
+
+	variables.push({
+		label: 'Lamp 3 On',
+		name: 'lamp3On',
+	})
+
+	variables.push({
+		label: 'Lamp 4 On',
+		name: 'lamp4On',
+	})
+
+	variables.push({
+		label: 'Lamp 5 On',
+		name: 'lamp5On',
+	})
+
+	variables.push({
+		label: 'Lamp 6 On',
+		name: 'lamp6On',
+	})
+
+	variables.push({
+		label: 'Lamp 7 On',
+		name: 'lamp7On',
+	})
+
+	variables.push({
+		label: 'Lamp 8 On',
+		name: 'lamp8On',
+	})
+
+	variables.push({
+		label: 'Serial Number',
+		name: 'serialNumber',
+	})
+
+	variables.push({
+		label: 'Software Version',
+		name: 'softwareVer',
+	})
+
+	variables.push({
+		label: 'Filter Usage Time',
+		name: 'filterUsageTime',
+	})
+
+	variables.push({
+		label: 'Filter Replacment Model Number',
+		name: 'filterReplacement',
+	})
+
+	variables.push({
+		label: 'Lamp Replacment Model Number',
+		name: 'lampReplacement',
 	})
 
 	variables.push({
@@ -569,6 +842,22 @@ instance.prototype.init_feedbacks = function () {
 		},
 		options: [
 			{
+				type: 'dropdown',
+				label: 'Lamp',
+				id: 'lamp',
+				default: '1',
+				choices: [
+					{ id: '1', label: 'Lamp 1' },
+					{ id: '2', label: 'Lamp 2' },
+					{ id: '3', label: 'Lamp 3' },
+					{ id: '4', label: 'Lamp 4' },
+					{ id: '5', label: 'Lamp 5' },
+					{ id: '6', label: 'Lamp 6' },
+					{ id: '7', label: 'Lamp 7' },
+					{ id: '8', label: 'Lamp 8' },
+				],
+			},
+			{
 				type: 'number',
 				label: 'Greater than Hours',
 				id: 'lampHour',
@@ -611,7 +900,7 @@ instance.prototype.init_feedbacks = function () {
 				label: 'Select input',
 				id: 'inputNum',
 				default: '31',
-				choices: CONFIG_INPUTS,
+				choices: self.projector.inputNames,
 			},
 		],
 	}
@@ -644,32 +933,32 @@ instance.prototype.feedback = function (feedback) {
 	if (feedback.type === 'errors') {
 		switch (feedback.options.error) {
 			case 'errorFan':
-				if (self.errorFan === feedback.options.errorState) {
+				if (self.projector.errorFan === feedback.options.errorState) {
 					return true
 				}
 				break
 			case 'errorLamp':
-				if (self.errorLamp === feedback.options.errorState) {
+				if (self.projector.errorLamp === feedback.options.errorState) {
 					return true
 				}
 				break
 			case 'errorTemp':
-				if (self.errorTemp === feedback.options.errorState) {
+				if (self.projector.errorTemp === feedback.options.errorState) {
 					return true
 				}
 				break
 			case 'errorCover':
-				if (self.errorCover === feedback.options.errorState) {
+				if (self.projector.errorCover === feedback.options.errorState) {
 					return true
 				}
 				break
 			case 'errorFilter':
-				if (self.errorFilter === feedback.options.errorState) {
+				if (self.projector.errorFilter === feedback.options.errorState) {
 					return true
 				}
 				break
 			case 'errorOther':
-				if (self.errorOther === feedback.options.errorState) {
+				if (self.projector.errorOther === feedback.options.errorState) {
 					return true
 				}
 				break
@@ -677,31 +966,31 @@ instance.prototype.feedback = function (feedback) {
 	}
 
 	if (feedback.type === 'freezeState') {
-		if (self.freezeState === feedback.options.freezeState) {
+		if (self.projector.freezeState === feedback.options.freezeState) {
 			return true
 		}
 	}
 
 	if (feedback.type === 'lampHour') {
-		if (self.lampHour > feedback.options.lampHour) {
+		if (self.projector.lamps.find((o) => o.lamp == feedback.options.lamp).hours > feedback.options.lampHour) {
 			return true
 		}
 	}
 
 	if (feedback.type === 'muteState') {
-		if (self.muteState === feedback.options.muteState) {
+		if (self.projector.muteState === feedback.options.muteState) {
 			return true
 		}
 	}
 
 	if (feedback.type === 'powerState') {
-		if (self.powerState === feedback.options.powerState) {
+		if (self.projector.powerState === feedback.options.powerState) {
 			return true
 		}
 	}
 
 	if (feedback.type === 'projectorInput') {
-		if (self.inputNum === feedback.options.inputNum) {
+		if (self.projector.inputNum === feedback.options.inputNum) {
 			return true
 		}
 	}
@@ -709,15 +998,39 @@ instance.prototype.feedback = function (feedback) {
 	return false
 }
 
-instance.prototype.poll = function () {
+instance.prototype.getProjectorDetails = function () {
 	var self = this
 
 	//Query Projector Class
 	self.send('%1CLSS ?')
 
-	//Query Input List
-	//self.projectorClass === '2' ? self.send('%2INST ?') :
-	self.send('%1INST ?')
+	//Query Projector Name
+	self.send('%1NAME ?')
+	//Query Projector Manufacturer
+	self.send('%1INF1 ?')
+	//Query Projector Product Name
+	self.send('%1INF2 ?')
+	//Query Projector Product Name
+	self.send('%1INFO ?')
+
+	//Projector Class dependant initial queries
+	self.socket.on('projectorClass', function () {
+		cmd = self.projector.class === '2' ? '%2INST ?' : '%1INST ?'
+		self.send(cmd)
+
+		//Query Serial Number
+		self.send('%2SNUM ?')
+		//Query Software Version
+		self.send('%2SVER ?')
+		//Query Lamp Replacement
+		self.send('%2RLMP ?')
+		//Query Filter Replacement
+		self.send('%2RFIL ?')
+	})
+}
+
+instance.prototype.poll = function () {
+	var self = this
 
 	//Query Power
 	self.send('%1POWR ?')
@@ -728,21 +1041,32 @@ instance.prototype.poll = function () {
 	//Query Mute Status
 	self.send('%1AVMT ?')
 
-	//Class 2 Queries
-	//Query Input Resolution
-	self.send('%2IRES ?')
 	//Query Input
-	self.send('%2INPT ?')
-	//Query Freeze Status
-	self.send('%2FREZ ?')
+	self.projector.class === '2' ? self.send('%2INPT ?') : self.send('%1INPT ?')
+
+	//Class 2 Queries
+	if (self.projector.class === '2') {
+		//Query Input Resolution
+		self.send('%2IRES ?')
+		//Query Recommended Resolution
+		self.send('%2RRES ?')
+		//Query Freeze Status
+		self.send('%2FREZ ?')
+		//Query Filter Usage
+		self.send('%2FILT ?')
+	}
+	debug('self.projector is', self.projector)
 }
 
 instance.prototype.getInputName = function (inputs) {
 	var self = this
+	self.projector.inputNames = []
 	inputs.forEach((element) => {
-		debug('sending %2INNM ?', element, 'to', self.config.host)
+		self.projector.inputNames.push({ id: element, label: null })
 		self.send('%2INNM ?' + element)
 	})
+	self.actions()
+	self.init_feedbacks()
 }
 
 instance_skel.extendedBy(instance)
