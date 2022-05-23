@@ -2,21 +2,31 @@
 
 **Available commands for PJLink**
 
-- Power On Projector
-- Power Off Projector
-- Open Shutter
-- Close Shutter
-- Freeze Input
-- Unfreeze Input
-- Change Input
+- Power On/Off Projector
+- AV Mute Projector
+- Freeze / Unfreeze Input
+- Change Input (Dynamic Input Names from Projector)
 
 **Available variables for PJLink**
 
+- Projector Class
+- Projector Name
+- Projector Manufacturer
+- Projector Product Name
+- Projector Other Info
 - Error Status
 - Freeze Status
 - Input Horizontal Resolution
 - Input Vertical Resolution
-- Lamp Hour
+- Recommended Horizontal Resolution
+- Recommended Vertical Resolution
+- Lamp Hour (Lamps 1 to 8)
+- Lamp On (Lamps 1 to 8)
+- Serial Number
+- Software Version
+- Filter Usage Time
+- Filter Replacement Model Number
+- Lamp Replacement Model Number
 - Mute Status
 - Power Status
 - Projector Input
