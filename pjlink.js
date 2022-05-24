@@ -284,8 +284,7 @@ instance.prototype.init_tcp = function (cb) {
 			if ((match = data.match(/^%2INNM=(.+)/))) {
 				if (!(match[1] === 'ERR1' || match[1] === 'ERR2' || match[1] === 'ERR3')) {
 					idx = self.projector.inputNames.findIndex((o) => o.label === null)
-					//self.projector.inputNames[idx].label = match[1]
-					//debug('---- Inputs are: ', self.projector.inputNames)
+					self.projector.inputNames[idx].label = match[1]
 				}
 			}
 
@@ -1056,16 +1055,17 @@ instance.prototype.poll = function () {
 		self.send('%2FILT ?')
 	}
 
+	self.actions() // reload actions
 	debug('self.projector is', self.projector)
 }
 
 instance.prototype.getInputName = function (inputs) {
 	var self = this
 	self.projector.inputNames = []
-	inputs.forEach((element) => {
+	for (const element of inputs) {
 		self.projector.inputNames.push({ id: element, label: null })
 		self.send('%2INNM ?' + element)
-	})
+	}
 }
 
 instance_skel.extendedBy(instance)
