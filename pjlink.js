@@ -129,12 +129,6 @@ instance.prototype.init_tcp = function (cb) {
 		self.socket = new net.Socket()
 		self.socket.setNoDelay(true)
 
-		self.getProjectorDetails()
-
-		self.pollTime = self.config.pollTime * 1000
-		self.poll_interval = setInterval(self.poll.bind(self), self.pollTime) //ms for poll
-		self.poll()
-
 		self.socket.on('error', function (err) {
 			debug('Network error', err)
 			self.status(self.STATE_ERROR, err)
@@ -152,6 +146,10 @@ instance.prototype.init_tcp = function (cb) {
 				self.status(self.STATUS_OK, 'Connected')
 				debug('Connected to projector')
 			}
+			self.getProjectorDetails()
+			self.pollTime = self.config.pollTime * 1000
+			self.poll_interval = setInterval(self.poll.bind(self), self.pollTime) //ms for poll
+			self.poll()
 
 			self.connected = true
 		})
@@ -286,8 +284,8 @@ instance.prototype.init_tcp = function (cb) {
 			if ((match = data.match(/^%2INNM=(.+)/))) {
 				if (!(match[1] === 'ERR1' || match[1] === 'ERR2' || match[1] === 'ERR3')) {
 					idx = self.projector.inputNames.findIndex((o) => o.label === null)
-					self.projector.inputNames[idx].label = match[1]
-					debug('---- Inputs are: ', self.projector.inputNames)
+					//self.projector.inputNames[idx].label = match[1]
+					//debug('---- Inputs are: ', self.projector.inputNames)
 				}
 			}
 
@@ -308,7 +306,6 @@ instance.prototype.init_tcp = function (cb) {
 
 			if ((match = data.match(/^%1LAMP=(.+)/))) {
 				var response = match[1].match(/(\d+.\d)/g)
-				debug('----Lamp Hrs Repsonse', response)
 				response.forEach((element, index) => {
 					hours = element.split(' ')[0]
 					on = element.split(' ')[1] === '1' ? 'On' : 'Off'
@@ -1012,20 +1009,23 @@ instance.prototype.getProjectorDetails = function () {
 	self.send('%1INF2 ?')
 	//Query Projector Product Name
 	self.send('%1INFO ?')
+	//Query Input List
+	self.send('%1INST ?')
 
 	//Projector Class dependant initial queries
 	self.socket.on('projectorClass', function () {
-		cmd = self.projector.class === '2' ? '%2INST ?' : '%1INST ?'
-		self.send(cmd)
-
-		//Query Serial Number
-		self.send('%2SNUM ?')
-		//Query Software Version
-		self.send('%2SVER ?')
-		//Query Lamp Replacement
-		self.send('%2RLMP ?')
-		//Query Filter Replacement
-		self.send('%2RFIL ?')
+		if (self.projector.class === '2') {
+			//Query Input List
+			self.send('%2INST ?')
+			//Query Serial Number
+			self.send('%2SNUM ?')
+			//Query Software Version
+			self.send('%2SVER ?')
+			//Query Lamp Replacement
+			self.send('%2RLMP ?')
+			//Query Filter Replacement
+			self.send('%2RFIL ?')
+		}
 	})
 }
 
@@ -1055,6 +1055,7 @@ instance.prototype.poll = function () {
 		//Query Filter Usage
 		self.send('%2FILT ?')
 	}
+
 	debug('self.projector is', self.projector)
 }
 
@@ -1065,8 +1066,6 @@ instance.prototype.getInputName = function (inputs) {
 		self.projector.inputNames.push({ id: element, label: null })
 		self.send('%2INNM ?' + element)
 	})
-	self.actions()
-	self.init_feedbacks()
 }
 
 instance_skel.extendedBy(instance)
