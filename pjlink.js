@@ -147,7 +147,7 @@ instance.prototype.init_tcp = function (cb) {
 				debug('Connected to projector')
 			}
 			self.getProjectorDetails()
-			self.pollTime = self.config.pollTime * 1000
+			self.pollTime = self.config.pollTime ? self.config.pollTime * 1000 : 10000
 			self.poll_interval = setInterval(self.poll.bind(self), self.pollTime) //ms for poll
 			self.poll()
 
