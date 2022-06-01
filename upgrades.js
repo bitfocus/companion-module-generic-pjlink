@@ -2,6 +2,11 @@ module.exports = {
 	upgrade_choices: function (context, config, actions, feedbacks) {
 		let changed = false
 
+		if (config.pollTime == undefined || config.pollTime == '') {
+			config.pollTime = 10
+			changed = true
+		}
+
 		actions.forEach((action) => {
 			switch (action.action) {
 				case 'powerOn':
