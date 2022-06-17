@@ -219,14 +219,14 @@ instance.prototype.init_tcp = function (cb) {
 						break
 					case '2':
 						{
-							self.log('error', cmd + ' Out of parameter')
+							self.log('error', 'Projector reported '+ cmd + ': Out of parameter')
 							debug('PJLINK ERROR: ', cmd + ' Out of parameter')
 						}
 						break
 					case '3':
 						{
-							self.log('error', 'Unavailable time')
-							debug('PJLINK ERROR: Unavailable time')
+							self.log('error', 'Projector reported Unavailable time. Command was ' + cmd)
+							debug('PJLINK ERROR: Unavailable time ' + cmd)
 						}
 						break
 					case '4':
@@ -431,6 +431,7 @@ instance.prototype.send = function (cmd) {
 	var self = this
 
 	debug('PJLINK: > ', cmd)
+	debug('self.commands is', self.commands)
 
 	if (self.connecting) {
 		self.commands.push(cmd)
@@ -914,7 +915,7 @@ instance.prototype.init_feedbacks = function () {
 				type: 'dropdown',
 				label: 'Status',
 				id: 'powerState',
-				default: 'Off',
+				default: '0',
 				choices: CONFIG_POWER_STATE,
 			},
 		],
