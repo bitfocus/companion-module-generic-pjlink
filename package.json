@@ -3,7 +3,7 @@
 	"legacy": [
 		"pjlink"
 	],
-	"version": "1.1.2",
+	"version": "1.2.0",
 	"api_version": "1.0.0",
 	"keywords": [
 		"Projector",
@@ -19,7 +19,8 @@
 	},
 	"author": "Per Roine <per.roine@gmail.com>",
 	"contributors": [
-		"Jamie McConchie"
+		"Jamie McConchie",
+		"John Knight, Jr <istnv@ayesti.com>"
 	],
 	"license": "MIT",
 	"homepage": "https://github.com/bitfocus/companion-module-generic-pjlink#readme",
