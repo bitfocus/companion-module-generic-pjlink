@@ -1,4 +1,3 @@
-'use strict'
 var net = require('net')
 var instance_skel = require('../../instance_skel')
 var crypto = require('crypto')
