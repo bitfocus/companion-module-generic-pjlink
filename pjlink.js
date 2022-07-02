@@ -31,6 +31,11 @@ const CONFIG_FREEZE_STATE = [
 	{ id: '1', label: 'On' },
 ]
 
+const CONFIG_ON_OFF_TOGGLE = [
+	{ id: '0', label: 'Off' },
+	{ id: '1', label: 'On' },
+	{ id: '2', label: 'Toggle'}
+]
 const CONFIG_INPUTS = [
 	{ id: '11', label: 'RGB1' },
 	{ id: '12', label: 'RGB2' },
@@ -71,6 +76,7 @@ function instance(system, id, config) {
 
 	// super-constructor
 	instance_skel.apply(this, arguments)
+
 	self.projector = []
 	self.projector.lamps = []
 
@@ -88,6 +94,8 @@ function instance(system, id, config) {
 
 	return self
 }
+
+instance.DEVELOPER_forceStartupUpgradeScript = 0
 
 instance.GetUpgradeScripts = function () {
 	return [upgradescripts.upgrade_choices]
@@ -616,7 +624,7 @@ instance.prototype.actions = function (system) {
 					label: 'Select Power State',
 					id: 'opt',
 					default: '1',
-					choices: CONFIG_POWER_STATE.slice(0, 2),
+					choices: CONFIG_ON_OFF_TOGGLE
 				},
 			],
 		},
@@ -628,7 +636,7 @@ instance.prototype.actions = function (system) {
 					label: 'Select Mute State',
 					id: 'opt',
 					default: '30',
-					choices: CONFIG_MUTE_STATE,
+					choices: CONFIG_ON_OFF_TOGGLE
 				},
 			],
 		},
@@ -637,10 +645,10 @@ instance.prototype.actions = function (system) {
 			options: [
 				{
 					type: 'dropdown',
-					label: 'Select Mute State',
+					label: 'Select Freeze State',
 					id: 'opt',
 					default: '0',
-					choices: CONFIG_FREEZE_STATE,
+					choices: CONFIG_ON_OFF_TOGGLE
 				},
 			],
 		},
@@ -665,17 +673,24 @@ instance.prototype.action = function (action) {
 	var opt = action.options
 	var cmd
 
+	function setToggle(curVal, opt) {
+		return 2 == parseInt(opt) ? 1-parseInt(curVal) : parseInt(opt);
+	}
+
 	switch (action.action) {
 		case 'powerState':
-			cmd = '%1POWR ' + opt.opt
+			// don't send if warming/cooling
+			if ('01'.includes(self.projector.powerState)) {
+				cmd = '%1POWR ' + setToggle(self.projector.powerState == '1', opt.opt)
+			}
 			break
 
 		case 'muteState':
-			cmd = '%1AVMT ' + opt.opt
+			cmd = '%1AVMT ' + setToggle(self.projector.muteState,opt.opt)
 			break
 
 		case 'freezeState':
-			cmd = '%2FREZ ' + opt.opt
+			cmd = '%2FREZ ' + setToggle(self.projector.freezeState,opt.opt)
 			break
 
 		case 'inputToggle':
