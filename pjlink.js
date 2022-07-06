@@ -95,10 +95,10 @@ function instance(system, id, config) {
 	return self
 }
 
-instance.DEVELOPER_forceStartupUpgradeScript = 0
+// instance.DEVELOPER_forceStartupUpgradeScript = 0
 
 instance.GetUpgradeScripts = function () {
-	return [upgradescripts.upgrade_choices]
+	return [upgradescripts.upgrade_choices, upgradescripts.upgrade_muteaction]
 }
 
 instance.prototype.updateConfig = function (config) {
@@ -686,7 +686,7 @@ instance.prototype.action = function (action) {
 			break
 
 		case 'muteState':
-			cmd = '%1AVMT ' + setToggle(self.projector.muteState,opt.opt)
+			cmd = '%1AVMT ' + '3' + setToggle(self.projector.muteState.slice(1),opt.opt)
 			break
 
 		case 'freezeState':

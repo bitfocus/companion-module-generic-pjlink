@@ -1,3 +1,5 @@
+const action = require("../../lib/action")
+
 module.exports = {
 	upgrade_choices: function (context, config, actions, feedbacks) {
 		let changed = false
@@ -55,4 +57,15 @@ module.exports = {
 		})
 		return changed // if something changed
 	},
+	upgrade_muteaction: function (context, config, actions, feedbacks) {
+		let changed = false
+
+		actions.forEach((action) => {
+			if ('muteState' == action.action && action.options.opt.slice(0,1)=='3') {
+				action.options.opt = action.options.opt.slice(1,2)
+				changed = true
+			}
+		})
+		return changed
+	}
 }
