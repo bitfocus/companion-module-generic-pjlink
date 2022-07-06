@@ -95,10 +95,10 @@ function instance(system, id, config) {
 	return self
 }
 
-instance.DEVELOPER_forceStartupUpgradeScript = 0
+// instance.DEVELOPER_forceStartupUpgradeScript = 0
 
 instance.GetUpgradeScripts = function () {
-	return [upgradescripts.upgrade_choices]
+	return [upgradescripts.upgrade_choices, upgradescripts.upgrade_muteaction]
 }
 
 instance.prototype.updateConfig = function (config) {
@@ -393,6 +393,15 @@ instance.prototype.init_tcp = function (cb) {
 						if (resp == '1' && self.lastStatus != self.STATUS_OK + ';Auth') {
 							self.status(self.STATUS_OK, 'Auth OK')
 							self.lastStatus = self.STATUS_OK + ';Auth'
+						} else if (resp == '0' && self.lastStatus != self.STATUS_OK + ';Off') {
+							self.status(self.STATUS_OK, 'PJ Standby')
+							self.lastStatus = self.STATUS_OK + ';Off'
+						} else if (resp == '2' && self.lastStatus != self.STATUS_OK + ';Cool') {
+							self.status(self.STATUS_OK, 'PJ Cooling')
+							self.lastStatus = self.STATUS_OK + ';Cool'
+						}else if (resp == '3' && self.lastStatus != self.STATUS_OK + ';Warm') {
+							self.status(self.STATUS_OK, 'PJ Warmup')
+							self.lastStatus = self.STATUS_OK + 'Warm'
 						}
 						break
 					case '%1INPT':
@@ -686,7 +695,7 @@ instance.prototype.action = function (action) {
 			break
 
 		case 'muteState':
-			cmd = '%1AVMT ' + setToggle(self.projector.muteState,opt.opt)
+			cmd = '%1AVMT ' + '3' + setToggle(self.projector.muteState.slice(1),opt.opt)
 			break
 
 		case 'freezeState':
