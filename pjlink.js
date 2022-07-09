@@ -26,7 +26,7 @@ const SHOW_ERROR_STATE = [
 	'Error'
 ]
 
-const CONFIG_FREEZE_STATE = [
+const CONFIG_ON_OFF_STATE = [
 	{ id: '0', label: 'Off' },
 	{ id: '1', label: 'On' },
 ]
@@ -57,11 +57,10 @@ const CONFIG_INPUT_CLASS = {
 	'6': 'Internal',
 }
 
-const CONFIG_MUTE_STATE = [
-	{ id: '11', label: 'Video mute On' },
-	{ id: '21', label: 'Audio Mute On' },
-	{ id: '30', label: 'A/V mute Off' },
-	{ id: '31', label: 'A/V mute On' },
+const CONFIG_MUTE_ITEM = [
+	{ id: '1', label: 'Video Mute'},
+	{ id: '2', label: 'Audio Mute' },
+	{ id: '3', label: 'A/V mute' },
 ]
 
 const CONFIG_POWER_STATE = [
@@ -98,7 +97,10 @@ function instance(system, id, config) {
 // instance.DEVELOPER_forceStartupUpgradeScript = 0
 
 instance.GetUpgradeScripts = function () {
-	return [upgradescripts.upgrade_choices, upgradescripts.upgrade_muteaction]
+	return [upgradescripts.upgrade_choices,
+		upgradescripts.upgrade_muteaction,
+		upgradescripts.upgrade_muteaction2
+	]
 }
 
 instance.prototype.updateConfig = function (config) {
@@ -222,7 +224,7 @@ instance.prototype.init_tcp = function (cb) {
 			self.socketTimer = setInterval(function() {
 					self.status(self.STATUS_ERROR,'Retrying connection')
 					self.init_tcp()
-				}, 30000)
+				}, 10000)
 		})
 
 		self.socket.on('connect', function () {
@@ -334,6 +336,11 @@ instance.prototype.init_tcp = function (cb) {
 			} else {
 				cmd = data.slice(0,6)
 				resp = data.slice(7)
+				// PJ returns 'OK' when command is accepted
+				// we need the status response
+				if ('OK' == resp) {
+					return
+				}
 
 				switch (cmd) {
 					case '%1CLSS':
@@ -406,10 +413,6 @@ instance.prototype.init_tcp = function (cb) {
 						break
 					case '%1INPT':
 					case '%2INPT':
-						// PJ returns 'OK' when input is switched
-						if ('OK' == resp) {
-							return
-						}
 						var iName = self.projector.inputNames.find((o) => o.id == resp)?.label
 						if (!iName) {
 							iName = CONFIG_INPUT_CLASS[resp[0]] + resp[1]
@@ -476,12 +479,14 @@ instance.prototype.init_tcp = function (cb) {
 						break
 					case '%1AVMT':
 						self.projector.muteState = resp
-						self.setVariable('muteState', CONFIG_MUTE_STATE.find((o) => o.id == resp)?.label)
+						var tmp = CONFIG_MUTE_ITEM.find((o) => o.id == resp[0])?.label
+						tmp = tmp + ' ' + CONFIG_ON_OFF_STATE.find((o) => o.id == resp[1])?.label
+						self.setVariable('muteState', tmp)
 						self.checkFeedbacks('muteState')
 						break
 					case '%2FREZ':
 						self.projector.freezeState = resp
-						self.setVariable('freezeState', CONFIG_FREEZE_STATE.find((o) => o.id == resp)?.label)
+						self.setVariable('freezeState', CONFIG_ON_OFF_STATE.find((o) => o.id == resp)?.label)
 						self.checkFeedbacks('freezeState')
 						break
 					case '%2SNUM':
@@ -642,9 +647,16 @@ instance.prototype.actions = function (system) {
 			options: [
 				{
 					type: 'dropdown',
-					label: 'Select Mute State',
+					label: 'Select Mute',
+					id: 'item',
+					default: '3',
+					choices: CONFIG_MUTE_ITEM
+				},
+				{
+					type: 'dropdown',
+					label: 'Select State',
 					id: 'opt',
-					default: '30',
+					default: '0',
 					choices: CONFIG_ON_OFF_TOGGLE
 				},
 			],
@@ -695,7 +707,15 @@ instance.prototype.action = function (action) {
 			break
 
 		case 'muteState':
-			cmd = '%1AVMT ' + '3' + setToggle(self.projector.muteState.slice(1),opt.opt)
+			cmd = '%1AVMT '
+			// toggle
+			if ('2' == opt.opt) {
+				var was = (opt.item & self.projector.muteState.slice(0,1) * self.projector.muteState.slice(1,2))
+				cmd += opt.item + (was==0 ? '1' : '0')
+			} else {
+				// simple on/off
+				cmd += opt.item + opt.opt
+			}
 			break
 
 		case 'freezeState':
@@ -978,7 +998,7 @@ instance.prototype.init_feedbacks = function () {
 				label: 'Status',
 				id: 'freezeState',
 				default: '0',
-				choices: CONFIG_FREEZE_STATE,
+				choices: CONFIG_ON_OFF_STATE,
 			},
 		],
 	}
@@ -1029,10 +1049,17 @@ instance.prototype.init_feedbacks = function () {
 		options: [
 			{
 				type: 'dropdown',
+				label: 'Mute item',
+				id: 'item',
+				default: '3',
+				choices: CONFIG_MUTE_ITEM,
+			},
+			{
+				type: 'dropdown',
 				label: 'Status',
-				id: 'muteState',
-				default: '31',
-				choices: CONFIG_MUTE_STATE,
+				id: 'opt',
+				default: '1',
+				choices: CONFIG_ON_OFF_STATE,
 			},
 		],
 	}
@@ -1129,9 +1156,12 @@ instance.prototype.feedback = function (feedback) {
 	}
 
 	if (feedback.type === 'muteState') {
-		if (self.projector.muteState === feedback.options.muteState) {
-			return true
-		}
+		// A/V is 'open' only if both are open
+		// A is open either A or A/V
+		// V is open either V or A/V
+		var item = (self.projector.muteState.slice(0,1) & feedback.options.item) ? 1 : 0
+		var stat = (self.projector.muteState.slice(1,2) == feedback.options.opt) ? 1 : 0
+		return (stat == item)
 	}
 
 	if (feedback.type === 'powerState') {
