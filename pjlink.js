@@ -702,7 +702,7 @@ instance.prototype.action = function (action) {
 		case 'powerState':
 			// don't send if warming/cooling
 			if ('01'.includes(self.projector.powerState)) {
-				cmd = '%1POWR ' + setToggle(self.projector.powerState == '1', opt.opt)
+				cmd = '%1POWR ' + setToggle(self.projector.powerState, opt.opt)
 			}
 			break
 
