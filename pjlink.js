@@ -37,15 +37,15 @@ const CONFIG_ON_OFF_TOGGLE = [
 	{ id: '2', label: 'Toggle'}
 ]
 const CONFIG_INPUTS = [
-	{ id: '11', label: 'RGB1' },
-	{ id: '12', label: 'RGB2' },
-	{ id: '31', label: 'DVI-D' },
-	{ id: '32', label: 'HDMI' },
-	{ id: '33', label: 'Digital link' },
-	{ id: '34', label: 'SDI1' },
-	{ id: '35', label: 'SDI2' },
-	{ id: '52', label: 'LAN' },
-	{ id: '56', label: 'HDBaseT' },
+	{ id: '11', label: 'RGB1 (11)' },
+	{ id: '12', label: 'RGB2 (12)' },
+	{ id: '31', label: 'DVI-D (31)' },
+	{ id: '32', label: 'HDMI (32)' },
+	{ id: '33', label: 'Digital link (33)' },
+	{ id: '34', label: 'SDI1 (34)' },
+	{ id: '35', label: 'SDI2 (35)' },
+	{ id: '52', label: 'LAN (52)' },
+	{ id: '56', label: 'HDBaseT (56)' },
 ]
 
 const CONFIG_INPUT_CLASS = {
@@ -86,6 +86,9 @@ function instance(system, id, config) {
 			on: 'off',
 		})
 	}
+	// Laser projectors return an error when asking
+	// for lamp hours
+	self.projector.isLaser = false;
 
 	self.projector.inputNames = CONFIG_INPUTS
 
@@ -300,10 +303,15 @@ instance.prototype.init_tcp = function (cb) {
 
 				switch (err) {
 					case '1':
-						errorText =
-							projClass === self.projector.class
-								? 'Undefined command: ' + cmd
-								: 'Command for different Protocol Class: ' + cmd
+						if (cmd == '%1LAMP') {
+							errorText = 'Projector reports no lamp, disabling lamp check for Laser'
+							self.projector.isLaser = true
+						} else {
+							errorText =
+								projClass === self.projector.class
+									? 'Undefined command: ' + cmd
+									: 'Command for different Protocol Class: ' + cmd
+						}
 						break
 					case '2':
 						errorText = 'Projector reported ' + cmd
@@ -326,13 +334,16 @@ instance.prototype.init_tcp = function (cb) {
 						newStatus = self.STATUS_ERROR
 						break
 				}
-				if (self.lastStatus != newStatus + ';' + err) {
-					self.log(newState, errorText)
-					self.status(newStatus, errorText)
-					self.lastStatus = newStatus + ';' + err
+				if (cmd == '%2INNM' ) {
+					// ignore. some PJ do not report input names
+				} else {
+					if (self.lastStatus != newStatus + ';' + err) {
+						self.log(newState, errorText)
+						self.status(newStatus, errorText)
+						self.lastStatus = newStatus + ';' + err
+					}
+					debug('PJLINK ERROR: ', errorText)
 				}
-				debug('PJLINK ERROR: ', errorText)
-				cmd = data.slice(0,6)
 			} else {
 				cmd = data.slice(0,6)
 				resp = data.slice(7)
@@ -373,24 +384,33 @@ instance.prototype.init_tcp = function (cb) {
 						self.setVariable('filterReplacement',resp)
 						break
 					case '%1INST':
+						self.projector.availInputs = resp.split(' ')
+						// class 1 does not report names
+						// so re-build a generic input list for this PJ
+						var classCount = new Array(Object.keys(CONFIG_INPUT_CLASS).length).fill(0)
+						self.projector.inputNames.length = 0
+						for (let p of self.projector.availInputs) {
+							var classNum = p[0]
+							var inClass = CONFIG_INPUT_CLASS[classNum]
+							classCount[classNum] += 1
+							self.projector.inputNames.push( {
+									id: p,
+									label: `${inClass}-${classCount[classNum]} (${p})`
+							})
+						}
+						self.updateActions = true
+						break
 					case '%2INST':
 						self.projector.availInputs = resp.split(' ')
-						if (cmd.slice(1,2) == '2') {
-							self.getInputName(self.projector.availInputs)
-						}
+						// get input names from PJ
+						self.getInputName(self.projector.availInputs)
 						break
 					case '%2INNM':
-						switch (resp) {
-							case 'ERR1':
-							case 'ERR2':
-							case 'ERR3':
-								break
-							default:
-								var idx = self.projector.inputNames.findIndex((o) => o.label === null)
-								self.projector.inputNames[idx].label = resp
-								self.haveNames += 1
-								self.updateActions = self.projector.inputNames.length == self.haveNames
-						}
+						var idx = self.projector.inputNames.findIndex((o) => o.label === null)
+						var num = self.projector.inputNames[idx].id
+						self.projector.inputNames[idx].label = `${resp} (${num})`
+						self.haveNames += 1
+						self.updateActions = self.projector.inputNames.length == self.haveNames
 						break
 					case '%1POWR':
 						self.projector.powerState = resp
@@ -415,7 +435,7 @@ instance.prototype.init_tcp = function (cb) {
 					case '%2INPT':
 						var iName = self.projector.inputNames.find((o) => o.id == resp)?.label
 						if (!iName) {
-							iName = CONFIG_INPUT_CLASS[resp[0]] + resp[1]
+							iName = CONFIG_INPUT_CLASS[resp[0]] + ' (' + resp + ')'
 							self.projector.inputNames.push({id: resp, label: iName })
 						}
 						if (resp != self.projector.inputNum) {
@@ -423,7 +443,7 @@ instance.prototype.init_tcp = function (cb) {
 							self.setVariable('projectorInput',iName)
 							self.checkFeedbacks('projectorInput')
 							// only check input res when input changes
-							if (cmd.slice(1,2) == '2') {
+							if (cmd[1] == '2') {
 								self.send('%2IRES ?')
 							}
 						}
@@ -710,7 +730,7 @@ instance.prototype.action = function (action) {
 			cmd = '%1AVMT '
 			// toggle
 			if ('2' == opt.opt) {
-				var was = (opt.item & self.projector.muteState.slice(0,1) * self.projector.muteState.slice(1,2))
+				var was = (opt.item & self.projector.muteState[0] * self.projector.muteState[1])
 				cmd += opt.item + (was==0 ? '1' : '0')
 			} else {
 				// simple on/off
@@ -1159,8 +1179,8 @@ instance.prototype.feedback = function (feedback) {
 		// A/V is 'open' only if both are open
 		// A is open either A or A/V
 		// V is open either V or A/V
-		var item = (self.projector.muteState.slice(0,1) & feedback.options.item) ? 1 : 0
-		var stat = (self.projector.muteState.slice(1,2) == feedback.options.opt) ? 1 : 0
+		var item = (self.projector.muteState[0] & feedback.options.item) ? 1 : 0
+		var stat = (self.projector.muteState[1] == feedback.options.opt) ? 1 : 0
 		return (stat == item)
 	}
 
@@ -1237,18 +1257,23 @@ instance.prototype.poll = function () {
 		self.lastHours = Date.now()
 	}
 
-	// class 2 got full list of input names from PJ
+	// got full list of input names from PJ, update action dropdown
 	if (self.updateActions) {
 		self.actions() // reload actions
+		self.updateActions == false // only need once
 	}
 	//Query Power
 	self.send('%1POWR ?')
 	//Query Error Status
 	self.send('%1ERST ?')
+
 	//Query Lamp
 	// -- I was going to add this to the 10 minute check
 	// -- but the response includes the lamp on status
-	self.send('%1LAMP ?')
+	// Laser PJ does not have a 'lamp'
+	if (!self.projector.isLaser) {
+		self.send('%1LAMP ?')
+	}
 
 	//Query Mute Status and input (only valid if PJ is on)
 	if (self.projector.powerState == '1') {

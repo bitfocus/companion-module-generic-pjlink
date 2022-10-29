@@ -6,6 +6,14 @@
 - AV Mute Projector
 - Freeze / Unfreeze Input
 - Change Input (Dynamic Input Names from Projector)
+- **Note:** Class 2 projectors provide actual input names
+<br>Class 1 Projectors will create generic names based on the input type:
+  - 1: RGB (analog)
+  - 2: Video (analog)
+  - 3: Digital (SDI, DVI, HDMI)
+  - 4: Storage (USB, SD Card)
+  - 5: Network (HD-BaseT, NDI)
+  - 6: Internal (Flash memory Logo or still)
 
 **Available variables for PJLink**
 
