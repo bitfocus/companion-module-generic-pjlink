@@ -1,4 +1,3 @@
-const action = require("../../lib/action")
 
 module.exports = {
 	upgrade_choices: function (context, config, actions, feedbacks) {
