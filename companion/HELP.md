@@ -38,6 +38,7 @@
 - Mute Status
 - Power Status
 - Projector Input
+- **Note:** Some variables are only available with Class 2 protocol. These will show as 'N/A' on a Class 1 projector.
 
 **Available feedback for PJLink**
 
