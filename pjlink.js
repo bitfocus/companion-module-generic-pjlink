@@ -104,11 +104,10 @@ class PJInstance extends InstanceBase {
 			this.pollTime = this.config.pollTime ? this.config.pollTime * 1000 : 10000
 			this.poll_interval = setInterval(this.poll.bind(this), this.pollTime) //ms for poll
 			this.poll()
-
-			if (typeof cb == 'function') {
-				cb()
-			}
 		})
+		if (typeof cb == 'function') {
+			cb()
+		}
 	}
 
 	init_tcp(cb) {
@@ -550,20 +549,20 @@ class PJInstance extends InstanceBase {
 			{
 				type: 'textinput',
 				id: 'host',
-				name: 'Target IP',
+				label: 'Target IP',
 				width: 6,
 				regex: Regex.IP,
 			},
 			{
 				type: 'textinput',
 				id: 'password',
-				name: 'PJLink password (empty for none)',
+				label: 'PJLink password (empty for none)',
 				width: 6,
 			},
 			{
 				type: 'number',
 				id: 'pollTime',
-				name: 'Enter polling time in seconds',
+				label: 'Enter polling time in seconds',
 				default: 10,
 			},
 		]

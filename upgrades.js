@@ -1,6 +1,6 @@
 import { CreateConvertToBooleanFeedbackUpgradeScript } from '@companion-module/base'
 
-export const UpgradeScripts = {
+export const UpgradeScripts = [
 	function(context, props) {
 		const result = {
 			updatedConfig: null,
@@ -113,4 +113,4 @@ export const UpgradeScripts = {
 		}
 		return result
 	}
-}
+]
