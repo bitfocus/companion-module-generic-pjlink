@@ -43,7 +43,7 @@ class PJInstance extends InstanceBase {
 	startup(config) {
 		this.config = config
 
-		this.DebugLevel = 2
+		this.DebugLevel = (process.env.DEVELOPER ? 2 : 0)
 
 		this.projector = {}
 		this.projector.lamps = []
@@ -58,8 +58,12 @@ class PJInstance extends InstanceBase {
 		// Laser projectors return an error when asking
 		// for lamp hours
 		this.projector.isLaser = false
+		this.projector.freezeState = '0'
+		this.projector.muteState = '00'
+
 
 		this.projector.inputNames = CONFIG.INPUTS
+
 
 		this.commands = []
 
@@ -251,11 +255,7 @@ class PJInstance extends InstanceBase {
 							}
 							break
 						case '3':
-							if (self.projector.powerState == '0') {
-								errorText = `Command '${cmd}' unavailable. Projector in standby.`
-							} else {
-								errorText = 'Projector Unavailable time. Command was ' + cmd
-							}
+							errorText = 'Projector Busy/Offline'
 							break
 						case '4':
 							errorText = 'Projector/Display failure'
@@ -271,7 +271,7 @@ class PJInstance extends InstanceBase {
 							self.updateStatus(newStatus, errorText)
 							self.lastStatus = newStatus + ';' + err
 						}
-						log('debug', `PJLINK ERROR: ${errorText}`)
+						self.log('debug', `PJLINK ERROR: ${errorText}`)
 					}
 				} else {
 					let cmd = data.slice(0, 6)
@@ -465,11 +465,11 @@ class PJInstance extends InstanceBase {
 
 				if (self.commands.length) {
 					if (self.lastCmd != cmd) {
-						log('debug', `Response mismatch, expected ${self.lastCmd}`)
+						self.log('debug', `Response mismatch, expected ${self.lastCmd}`)
 					}
 					let nextCmd = self.commands.shift()
 					if (self.DebugLevel >= 1) {
-						log('debug', `PJLINK: > ${nextCmd}`)
+						self.log('debug', `PJLINK: > ${nextCmd}`)
 					}
 					self.lastCmd = nextCmd.slice(0, 6)
 					self.socket.send(self.passwordstring + nextCmd + '\r')
@@ -516,7 +516,7 @@ class PJInstance extends InstanceBase {
 		}
 	}
 
-	sendCmd(cmd) {
+	async sendCmd(cmd) {
 		let self = this
 
 		if (this.DebugLevel >= 1) {
@@ -1122,8 +1122,8 @@ class PJInstance extends InstanceBase {
 	}
 
 	poll() {
-		var self = this
-		var checkHours = false
+		let self = this
+		let checkHours = false
 
 		// re-connect?
 		if (!this.connected) {
