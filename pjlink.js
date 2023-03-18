@@ -6,7 +6,7 @@ import * as CONFIG from './choices.js'
 import { UpgradeScripts } from './upgrades.js'
 
 function ar2obj(a) {
-	return a.map((e, i) => ({ id: i, label: e } ))
+	return a.map((e, i) => ({ id: i, label: e }))
 }
 
 class PJInstance extends InstanceBase {
@@ -43,7 +43,7 @@ class PJInstance extends InstanceBase {
 	startup(config) {
 		this.config = config
 
-		this.DebugLevel = 2
+		this.DebugLevel = process.env.DEVELOPER ? 2 : 0
 
 		this.projector = {}
 		this.projector.lamps = []
@@ -58,6 +58,8 @@ class PJInstance extends InstanceBase {
 		// Laser projectors return an error when asking
 		// for lamp hours
 		this.projector.isLaser = false
+		this.projector.freezeState = '0'
+		this.projector.muteState = '00'
 
 		this.projector.inputNames = CONFIG.INPUTS
 
@@ -76,7 +78,7 @@ class PJInstance extends InstanceBase {
 			this.log('error', 'Authentication error. Password not accepted by projector')
 			this.commands.length = 0
 			this.updateStatus(InstanceStatus.Error, 'Authentication error')
-			this.connected = false
+			this.pjConnected = false
 			this.authOK = false
 			this.passwordstring = ''
 			this.socket.destroy()
@@ -101,6 +103,9 @@ class PJInstance extends InstanceBase {
 		this.lastCmd = '%1POWR ?'
 		this.socket?.send(this.passwordstring + this.lastCmd + '\r').then(() => {
 			this.getProjectorDetails()
+			if (this.poll_interval) {
+				delete this.poll_interval
+			}
 			this.pollTime = this.config.pollTime ? this.config.pollTime * 1000 : 10000
 			this.poll_interval = setInterval(this.poll.bind(this), this.pollTime) //ms for poll
 			this.poll()
@@ -148,14 +153,15 @@ class PJInstance extends InstanceBase {
 					self.lastStatus = InstanceStatus.Error + ';' + err.name
 					self.log('error', 'Network ' + err.message)
 				}
-				self.connected = false
+				self.pjConnected = false
 				self.authOK = false
-				delete self.socket
+				this.commands = []
 				// set timer to retry connection in 30 secs
 				if (self.socketTimer) {
 					clearInterval(self.socketTimer)
 					delete self.socketTimer
 				}
+				delete self.socket
 				self.socketTimer = setInterval(function () {
 					self.updateStatus(InstanceStatus.ConnectionFailure, 'Retrying connection')
 					self.init_tcp()
@@ -171,12 +177,12 @@ class PJInstance extends InstanceBase {
 					self.log('info', 'Connected')
 					self.lastStatus = InstanceStatus.Ok
 				}
-				self.connected = true
+				self.pjConnected = true
 				self.authOK = false
 			})
 
 			this.socket.on('end', function () {
-				self.connected = false
+				self.pjConnected = false
 				self.authOK = false
 				if (self.lastStatus != InstanceStatus.Error + ';Disc') {
 					self.log('error', 'Projector Disconnected')
@@ -251,11 +257,7 @@ class PJInstance extends InstanceBase {
 							}
 							break
 						case '3':
-							if (self.projector.powerState == '0') {
-								errorText = `Command '${cmd}' unavailable. Projector in standby.`
-							} else {
-								errorText = 'Projector Unavailable time. Command was ' + cmd
-							}
+							errorText = 'Projector Busy/Offline'
 							break
 						case '4':
 							errorText = 'Projector/Display failure'
@@ -271,7 +273,7 @@ class PJInstance extends InstanceBase {
 							self.updateStatus(newStatus, errorText)
 							self.lastStatus = newStatus + ';' + err
 						}
-						log('debug', `PJLINK ERROR: ${errorText}`)
+						self.log('debug', `PJLINK ERROR: ${errorText}`)
 					}
 				} else {
 					let cmd = data.slice(0, 6)
@@ -384,10 +386,10 @@ class PJInstance extends InstanceBase {
 								let lampHours = stat[i]
 								let onState = stat[i + 1] == '1' ? 'On' : 'Off'
 								self.projector.lamps[thisLamp] = { lamp: thisLamp, hours: lampHours, on: onState }
-								self.setVariableValues( {
-									[`lamp${thisLamp + 1}Hrs`]: lampHours ,
-									[`lamp${thisLamp + 1}On`]: onState
-								} )
+								self.setVariableValues({
+									[`lamp${thisLamp + 1}Hrs`]: lampHours,
+									[`lamp${thisLamp + 1}On`]: onState,
+								})
 							}
 							// fill table for unused lamps
 							for (let i = stat.length; i < 16; i += 2) {
@@ -395,7 +397,7 @@ class PJInstance extends InstanceBase {
 								self.projector.lamps[thisLamp] = { lamp: thisLamp, hours: 0, on: 'Off' }
 								self.setVariableValues({
 									[`lamp${thisLamp + 1}Hrs`]: '',
-									[`lamp${thisLamp + 1}On`]: 'N/A'
+									[`lamp${thisLamp + 1}On`]: 'N/A',
 								})
 							}
 							self.checkFeedbacks('lampHour')
@@ -406,7 +408,7 @@ class PJInstance extends InstanceBase {
 							self.projector.inputVertRes = res[1]
 							self.setVariableValues({
 								inputHorzRes: res[0],
-								inputVertRes: res[1]
+								inputVertRes: res[1],
 							})
 							break
 						case '%2RRES':
@@ -415,7 +417,7 @@ class PJInstance extends InstanceBase {
 							self.projector.recVertRes = res[1]
 							self.setVariableValues({
 								recHorzRes: res[0],
-								recVertRes: res[1]
+								recVertRes: res[1],
 							})
 							break
 						case '%1ERST':
@@ -426,13 +428,13 @@ class PJInstance extends InstanceBase {
 							self.projector.errorCover = errs[3]
 							self.projector.errorFilter = errs[4]
 							self.projector.errorOther = errs[5]
-							self.setVariableValues( {
+							self.setVariableValues({
 								errorFan: CONFIG.ERROR_STATE[errs[0]],
 								errorLamp: CONFIG.ERROR_STATE[errs[1]],
 								errorTemp: CONFIG.ERROR_STATE[errs[2]],
 								errorCover: CONFIG.ERROR_STATE[errs[3]],
 								errorFilter: CONFIG.ERROR_STATE[errs[4]],
-								errorOther: CONFIG.ERROR_STATE[errs[5]]
+								errorOther: CONFIG.ERROR_STATE[errs[5]],
 							})
 							self.checkFeedbacks('errors')
 							break
@@ -464,12 +466,12 @@ class PJInstance extends InstanceBase {
 				}
 
 				if (self.commands.length) {
-					if (self.lastCmd != cmd) {
-						log('debug', `Response mismatch, expected ${self.lastCmd}`)
+					if (self.lastCmd != data.slice(0,6)) {
+						self.log('debug', `Response mismatch, expected ${self.lastCmd}`)
 					}
 					let nextCmd = self.commands.shift()
 					if (self.DebugLevel >= 1) {
-						log('debug', `PJLINK: > ${nextCmd}`)
+						self.log('debug', `PJLINK: > ${nextCmd}`)
 					}
 					self.lastCmd = nextCmd.slice(0, 6)
 					self.socket.send(self.passwordstring + nextCmd + '\r')
@@ -503,7 +505,7 @@ class PJInstance extends InstanceBase {
 							}
 
 							delete self.socket
-							self.connected = false
+							self.pjConnected = false
 							self.authOK = false
 
 							self.log('debug', 'disconnecting per protocol defintion :(')
@@ -516,7 +518,7 @@ class PJInstance extends InstanceBase {
 		}
 	}
 
-	sendCmd(cmd) {
+	async sendCmd(cmd) {
 		let self = this
 
 		if (this.DebugLevel >= 1) {
@@ -529,22 +531,27 @@ class PJInstance extends InstanceBase {
 		}
 
 		if (!this.authOK) {
-			this.commands.push(cmd)
-		} else if (this.connected) {
-			this.socket.send(this.passwordstring + cmd + '\r')
+			if (!(cmd in this.commands)) {
+				this.commands.push(cmd)
+			}
+		} else if (this.pjConnected) {
+			try {
+				await this.socket.send(this.passwordstring + cmd + '\r')
+			} catch (error) {
+				// connected but not ready :/
+				if (error.code == 'EPIPE') {
+					this.commands.push(cmd)
+				}
+			}
 		} else {
-			this.init_tcp(function (self) {
-				self.connect_time = Date.now()
-				self.lastCmd = cmd.slice(0, 6)
-
-				self.socket.send(self.passwordstring + cmd + '\r')
-			})
+			if (!(cmd in this.commands)) {
+				this.commands.push(cmd)
+			}
 		}
 	}
 
 	// Return config fields for web config
 	getConfigFields() {
-
 		return [
 			{
 				type: 'textinput',
@@ -574,7 +581,6 @@ class PJInstance extends InstanceBase {
 	 * @since 2.0.0
 	 */
 	buildActions() {
-
 		let actions = {
 			powerState: {
 				name: 'Change Projector Power State',
@@ -901,7 +907,7 @@ class PJInstance extends InstanceBase {
 		})
 
 		this.setVariableDefinitions(variables)
-		this.setVariableValues( {
+		this.setVariableValues({
 			freezeState: 'N/A',
 			serialNumber: 'N/A',
 			softwareVer: 'N/A',
@@ -911,7 +917,7 @@ class PJInstance extends InstanceBase {
 			inputHorzRes: 'N/A',
 			inputVertRes: 'N/A',
 			recHorzRes: 'N/A',
-			recVertRes: 'N/A'
+			recVertRes: 'N/A',
 		})
 	}
 
@@ -944,8 +950,8 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return (this.projector[feedback.options.error] === feedback.options.errorState)
-				}
+					return this.projector[feedback.options.error] === feedback.options.errorState
+				},
 			},
 			freezeState: {
 				type: 'boolean',
@@ -965,8 +971,8 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return (this.projector.freezeState === feedback.options.freezeState)
-				}
+					return this.projector.freezeState === feedback.options.freezeState
+				},
 			},
 			lampHour: {
 				type: 'boolean',
@@ -1002,8 +1008,8 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return (this.projector.lamps[feedback.options.lamp].hours > feedback.options.lampHour)
-				}
+					return this.projector.lamps[feedback.options.lamp].hours > feedback.options.lampHour
+				},
 			},
 			muteState: {
 				type: 'boolean',
@@ -1033,10 +1039,10 @@ class PJInstance extends InstanceBase {
 					// A/V is 'open' only if both are open
 					// A is open either A or A/V
 					// V is open either V or A/V
-					let item = (self.projector.muteState[0] & feedback.options.item) ? 1 : 0
-					let stat = (self.projector.muteState[1] == feedback.options.opt) ? 1 : 0
-					return (stat == item)
-				}
+					let item = self.projector.muteState[0] & feedback.options.item ? 1 : 0
+					let stat = self.projector.muteState[1] == feedback.options.opt ? 1 : 0
+					return stat == item
+				},
 			},
 			projectorInput: {
 				type: 'boolean',
@@ -1056,8 +1062,8 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return (self.projector.inputNum === feedback.options.inputNum)
-				}
+					return self.projector.inputNum === feedback.options.inputNum
+				},
 			},
 			powerState: {
 				type: 'boolean',
@@ -1077,8 +1083,8 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return (self.projector.powerState === feedback.options.powerState)
-				}
+					return self.projector.powerState === feedback.options.powerState
+				},
 			},
 		}
 
@@ -1122,11 +1128,11 @@ class PJInstance extends InstanceBase {
 	}
 
 	poll() {
-		var self = this
-		var checkHours = false
+		let self = this
+		let checkHours = false
 
 		// re-connect?
-		if (!this.connected) {
+		if (!this.pjConnected) {
 			this.init_tcp()
 			return
 		}
