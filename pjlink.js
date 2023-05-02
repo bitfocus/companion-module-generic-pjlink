@@ -119,7 +119,7 @@ class PJInstance extends InstanceBase {
 		const self = this
 		let receivebuffer = ''
 		this.passwordstring = ''
-		let match
+		let args
 		let cmd
 		let err
 		let resp
@@ -223,18 +223,18 @@ class PJInstance extends InstanceBase {
 				}
 
 				// auth password setup
-				if (data.match(/^PJLINK*/)) {
+				if (data.match(/^PJLINK*/i)) {
 					self.check_auth(data, cb)
 					return
 				}
 
-				if ((match = data.match(/^(%(\d).+)=ERR(\d)/))) {
+				if ((args = data.match(/^(%(\d).+)=ERR(\d)/i))) {
 					let errorText = 'Unknown error'
 					let newState = 'warn'
 					let newStatus = InstanceStatus.UnknownWarning
-					cmd = match[1]
-					projClass = match[2]
-					err = match[3]
+					cmd = args[1].toUpperCase()
+					projClass = parseInt(args[2])
+					err = args[3].toUpperCase()
 
 					switch (err) {
 						case '1':
@@ -276,8 +276,8 @@ class PJInstance extends InstanceBase {
 						self.log('debug', `PJLINK ERROR: ${errorText}`)
 					}
 				} else {
-					let cmd = data.slice(0, 6)
-					let resp = data.slice(7)
+					let cmd = data.slice(0, 6).toUpperCase()
+					let resp = data.slice(7) // leave case alone for labels
 					// PJ returns 'OK' when command is accepted
 					// we need the status response
 					if ('OK' == resp) {
@@ -337,11 +337,13 @@ class PJInstance extends InstanceBase {
 							self.getInputName(self.projector.availInputs)
 							break
 						case '%2INNM':
-							let idx = self.projector.inputNames.findIndex((o) => o.label === null)
-							let num = self.projector.inputNames[idx].id
-							self.projector.inputNames[idx].label = `${resp} (${num})`
-							self.haveNames += 1
-							self.updateActions = self.projector.inputNames.length == self.haveNames
+							if (self.projector.inputNames.length > self.haveNames) {
+								let idx = self.projector.inputNames.findIndex((o) => o.label === null)
+								let num = self.projector.inputNames[idx].id
+								self.projector.inputNames[idx].label = `${resp} (${num})`
+								self.haveNames += 1
+								self.updateActions = self.projector.inputNames.length == self.haveNames
+							}
 							break
 						case '%1POWR':
 							self.projector.powerState = resp
