@@ -1081,7 +1081,7 @@ class PJInstance extends InstanceBase {
 						label: 'Status',
 						id: 'powerState',
 						default: '0',
-						choices: CONFIG.POWER_STATE,
+						choices: ar2obj(CONFIG.POWER_STATE),
 					},
 				],
 				callback: (feedback, context) => {
