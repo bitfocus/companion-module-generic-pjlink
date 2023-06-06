@@ -35,6 +35,12 @@ class PJInstance extends InstanceBase {
 			clearInterval(this.poll_interval)
 			delete this.poll_interval
 		}
+
+		if (this.restartTimer !== undefined) {
+			clearInterval(this.restartTimer)
+			delete this.restartTimer
+		}
+
 		if (!restart) {
 			this.log('debug', `Destroy ${this.id}`)
 		}
@@ -78,10 +84,9 @@ class PJInstance extends InstanceBase {
 			this.log('error', 'Authentication error. Password not accepted by projector')
 			this.commands.length = 0
 			this.updateStatus(InstanceStatus.Error, 'Authentication error')
-			this.pjConnected = false
 			this.authOK = false
 			this.passwordstring = ''
-			this.socket.destroy()
+			this.socket?.destroy()
 			delete this.socket
 			return
 		} else if ('PJLINK 0' == data) {
@@ -115,6 +120,23 @@ class PJInstance extends InstanceBase {
 		}
 	}
 
+	restartSocket() {
+		let self = this
+
+		if (self.restartTimer) {
+			clearInterval(self.restartTimer)
+			delete self.restartTimer
+		}
+
+		self.restartTimer = setInterval(function () {
+			// don't restart if connected
+			if (self.socket === undefined || !self.socket.isConnected) {
+				self.updateStatus(InstanceStatus.ConnectionFailure, 'Retrying connection')
+				self.init_tcp()
+			}
+		}, 5000)
+	}
+
 	init_tcp(cb) {
 		const self = this
 		let receivebuffer = ''
@@ -142,30 +164,34 @@ class PJInstance extends InstanceBase {
 		}
 
 		if (this.config.host) {
-			this.authOK = true
-			this.commands = []
+			self.authOK = false
+			self.commands = []
 
-			this.socket = new TCPHelper(this.config.host, 4352)
+			self.socket = new TCPHelper(self.config.host, 4352)
 
 			this.socket.on('error', function (err) {
+				if (err.code == 'EPIPE') {
+					// not really connected, yet
+					return
+				}
 				if (self.lastStatus != InstanceStatus.Error + ';' + err.name) {
 					self.updateStatus(InstanceStatus.Error, 'Network ' + err.message)
 					self.lastStatus = InstanceStatus.Error + ';' + err.name
 					self.log('error', 'Network ' + err.message)
 				}
-				self.pjConnected = false
-				self.authOK = false
 				this.commands = []
-				// set timer to retry connection in 30 secs
+				// set timer to retry connection in 5 secs
 				if (self.socketTimer) {
 					clearInterval(self.socketTimer)
 					delete self.socketTimer
 				}
-				delete self.socket
-				self.socketTimer = setInterval(function () {
-					self.updateStatus(InstanceStatus.ConnectionFailure, 'Retrying connection')
-					self.init_tcp()
-				}, 10000)
+
+				self.authOK = false
+				if (self.socket !== undefined && self.socket.destroy !== undefined) {
+					self.socket.destroy()
+					delete self.socket
+				}
+				self.restartSocket()
 			})
 
 			this.socket.on('connect', function () {
@@ -177,13 +203,14 @@ class PJInstance extends InstanceBase {
 					self.log('info', 'Connected')
 					self.lastStatus = InstanceStatus.Ok
 				}
-				self.pjConnected = true
+				if (this.restartTimer !== undefined) {
+					clearInterval(this.restartTimer)
+					delete this.restartTimer
+				}
 				self.authOK = false
 			})
 
 			this.socket.on('end', function () {
-				self.pjConnected = false
-				self.authOK = false
 				if (self.lastStatus != InstanceStatus.Error + ';Disc') {
 					self.log('error', 'Projector Disconnected')
 					self.updateStatus(InstanceStatus.Error, 'Disconnected')
@@ -194,11 +221,13 @@ class PJInstance extends InstanceBase {
 					clearInterval(self.socketTimer)
 					delete self.socketTimer
 				}
-				self.socketTimer = setInterval(function () {
-					self.updateStatus(InstanceStatus.ConnectionFailure, 'Retrying connection')
-					self.init_tcp()
-				}, 30000)
+				self.authOK = false
+				if (self.socket !== undefined && self.socket.destroy !== undefined) {
+					self.socket.destroy()
+					delete self.socket
+				}
 				self.log('debug', 'Disconnected')
+				self.restartSocket()
 			})
 
 			this.socket.on('data', function (chunk) {
@@ -242,10 +271,13 @@ class PJInstance extends InstanceBase {
 								errorText = 'Projector reports no lamp, disabling lamp check for Laser'
 								self.projector.isLaser = true
 							} else {
-								errorText =
-									projClass === self.projector.class
-										? 'Undefined command: ' + cmd
-										: 'Command for different Protocol Class: ' + cmd
+								if (projClass === self.projector.class) {
+									errorText = 'Undefined command: ' + cmd
+								} else {
+									errorText = 'Command for different Protocol Class: ' + cmd
+									// downgrade to Class 1
+									self.projector.class = 1
+								}
 							}
 							break
 						case '2':
@@ -346,6 +378,7 @@ class PJInstance extends InstanceBase {
 							}
 							break
 						case '%1POWR':
+							let powerTransition = self.projector.powerState + resp
 							self.projector.powerState = resp
 							self.setVariableValues({ powerState: CONFIG.POWER_STATE[resp] })
 							self.checkFeedbacks('powerState')
@@ -362,6 +395,11 @@ class PJInstance extends InstanceBase {
 							} else if (resp == '3' && self.lastStatus != InstanceStatus.Ok + ';Warm') {
 								self.updateStatus(InstanceStatus.Ok, 'PJ Warmup')
 								self.lastStatus = InstanceStatus.Ok + ';Warm'
+							}
+							// PJ went from off/warm to powered on, initial Query Mute Status and input
+							if (['01', '31'].includes(powerTransition)) {
+								self.sendCmd('%1AVMT ?')
+								self.sendCmd(`%${self.projector.class}INPT ?`)
 							}
 							break
 						case '%1INPT':
@@ -468,7 +506,7 @@ class PJInstance extends InstanceBase {
 				}
 
 				if (self.commands.length) {
-					if (self.lastCmd != data.slice(0,6)) {
+					if (self.lastCmd != data.slice(0, 6)) {
 						self.log('debug', `Response mismatch, expected ${self.lastCmd}`)
 					}
 					let nextCmd = self.commands.shift()
@@ -476,7 +514,9 @@ class PJInstance extends InstanceBase {
 						self.log('debug', `PJLINK: > ${nextCmd}`)
 					}
 					self.lastCmd = nextCmd.slice(0, 6)
-					self.socket.send(self.passwordstring + nextCmd + '\r')
+					self.socket?.send(self.passwordstring + nextCmd + '\r').then(() => {
+						//woot
+					})
 				} else {
 					if (self.socketTimer) {
 						clearInterval(self.socketTimer)
@@ -484,11 +524,17 @@ class PJInstance extends InstanceBase {
 					}
 
 					self.socketTimer = setInterval(function () {
+						// socket isn't connected, abort
+						if (self.socket === undefined || !self.socket.isConnected) {
+							return
+						}
 						if (self.commands.length > 0) {
 							let cmd = self.commands.shift()
 							self.connect_time = Date.now()
 							self.lastCmd = cmd.slice(0, 6)
-							self.socket.send(self.passwordstring + cmd + '\r')
+							self.socket.send(self.passwordstring + cmd + '\r').then(() => {
+								//woot
+							})
 							clearInterval(self.socketTimer)
 							delete self.socketTimer
 						}
@@ -504,10 +550,9 @@ class PJInstance extends InstanceBase {
 							}
 							if (self.socket !== undefined && self.socket.destroy !== undefined) {
 								self.socket.destroy()
+								delete self.socket
 							}
 
-							delete self.socket
-							self.pjConnected = false
 							self.authOK = false
 
 							self.log('debug', 'disconnecting per protocol defintion :(')
@@ -522,6 +567,7 @@ class PJInstance extends InstanceBase {
 
 	async sendCmd(cmd) {
 		let self = this
+		let sent = true
 
 		if (this.DebugLevel >= 1) {
 			this.log('debug', `PJLINK(send): > ${cmd}`)
@@ -533,22 +579,20 @@ class PJInstance extends InstanceBase {
 		}
 
 		if (!this.authOK) {
-			if (!(cmd in this.commands)) {
-				this.commands.push(cmd)
-			}
-		} else if (this.pjConnected) {
+			sent = false
+		} else if (this.socket.isConnected) {
 			try {
 				await this.socket.send(this.passwordstring + cmd + '\r')
+				this.lastCmd = cmd
 			} catch (error) {
 				// connected but not ready :/
 				if (error.code == 'EPIPE') {
-					this.commands.push(cmd)
+					sent = false
 				}
 			}
-		} else {
-			if (!(cmd in this.commands)) {
-				this.commands.push(cmd)
-			}
+		}
+		if (!sent && !this.commands.includes(cmd)) {
+			this.commands.push(cmd)
 		}
 	}
 
@@ -1093,38 +1137,39 @@ class PJInstance extends InstanceBase {
 		this.setFeedbackDefinitions(feedbacks)
 	}
 
-	getProjectorDetails() {
+	async getProjectorDetails() {
 		var self = this
 
 		//Query Projector Class
-		this.sendCmd('%1CLSS ?')
+		await self.sendCmd('%1CLSS ?')
+		await self.sendCmd('%1AVMT ?')
 
 		//Projector Class dependant initial queries
-		this.socket.on('projectorClass', function () {
+		self.socket.on('projectorClass', async function () {
 			//any class
 
 			//Query Projector Name
-			self.sendCmd('%1NAME ?')
+			await self.sendCmd('%1NAME ?')
 			//Query Projector Manufacturer
-			self.sendCmd('%1INF1 ?')
+			await self.sendCmd('%1INF1 ?')
 			//Query Projector Product Name
-			self.sendCmd('%1INF2 ?')
+			await self.sendCmd('%1INF2 ?')
 			//Query Projector Product Name
-			self.sendCmd('%1INFO ?')
+			await self.sendCmd('%1INFO ?')
 
-			self.sendCmd(`%${self.projector.class}INST ?`)
+			await self.sendCmd(`%${self.projector.class}INST ?`)
 
 			if (self.projector.class === '2') {
 				//Query Serial Number
-				self.sendCmd('%2SNUM ?')
+				await self.sendCmd('%2SNUM ?')
 				//Query Software Version
-				self.sendCmd('%2SVER ?')
+				await self.sendCmd('%2SVER ?')
 				//Query Lamp Replacement
-				self.sendCmd('%2RLMP ?')
+				await self.sendCmd('%2RLMP ?')
 				//Query Filter Replacement
-				self.sendCmd('%2RFIL ?')
+				await self.sendCmd('%2RFIL ?')
 				//Query Recommended Resolution
-				self.sendCmd('%2RRES ?')
+				await self.sendCmd('%2RRES ?')
 			}
 		})
 	}
@@ -1134,7 +1179,7 @@ class PJInstance extends InstanceBase {
 		let checkHours = false
 
 		// re-connect?
-		if (!this.pjConnected) {
+		if (self.socket === undefined || !self.socket.isConnected) {
 			this.init_tcp()
 			return
 		}
