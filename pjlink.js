@@ -6,7 +6,7 @@ import * as CONFIG from './choices.js'
 import { UpgradeScripts } from './upgrades.js'
 
 function ar2obj(a) {
-	return a.map((e, i) => ({ id: i, label: e }))
+	return a.map((e, i) => ({ id: `${i}`, label: e }))
 }
 
 class PJInstance extends InstanceBase {
@@ -996,7 +996,7 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return this.projector[feedback.options.error] === feedback.options.errorState
+					return this.projector[feedback.options.error] == feedback.options.errorState
 				},
 			},
 			freezeState: {
@@ -1017,7 +1017,7 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return this.projector.freezeState === feedback.options.freezeState
+					return this.projector.freezeState == feedback.options.freezeState
 				},
 			},
 			lampHour: {
@@ -1108,7 +1108,7 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return self.projector.inputNum === feedback.options.inputNum
+					return self.projector.inputNum == feedback.options.inputNum
 				},
 			},
 			powerState: {
