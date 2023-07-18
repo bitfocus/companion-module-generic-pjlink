@@ -80,20 +80,21 @@ class PJInstance extends InstanceBase {
 	check_auth(data, cb) {
 		let code = []
 
-		if ('PJLINK ERRA' == data) {
+		if ('PJLINK ERRA' == data.toUpperCase()) {
 			this.log('error', 'Authentication error. Password not accepted by projector')
 			this.commands.length = 0
 			this.updateStatus(InstanceStatus.Error, 'Authentication error')
+			this.pjConnected = false
 			this.authOK = false
 			this.passwordstring = ''
 			this.socket?.destroy()
 			delete this.socket
 			return
-		} else if ('PJLINK 0' == data) {
+		} else if ('PJLINK 0' == data.toUpperCase()) {
 			this.log('debug', 'Projector does not need password')
 			this.passwordstring = ''
 			this.authOK = true
-		} else if ((code = data.match(/^PJLINK 1 (\S+)/))) {
+		} else if ((code = data.match(/^PJLINK 1 (\S+)/i))) {
 			let digest = code[1] + this.config.password
 			let hasher = crypto.createHash('md5')
 			this.passwordstring = hasher.update(digest, 'utf-8').digest('hex')
@@ -121,24 +122,23 @@ class PJInstance extends InstanceBase {
 	}
 
 	restartSocket() {
-		let self = this
 
-		if (self.restartTimer) {
-			clearInterval(self.restartTimer)
-			delete self.restartTimer
+		if (this.restartTimer) {
+			clearInterval(this.restartTimer)
+			delete this.restartTimer
 		}
 
-		self.restartTimer = setInterval(function () {
+		this.restartTimer = setInterval(() => {
 			// don't restart if connected
-			if (self.socket === undefined || !self.socket.isConnected) {
-				self.updateStatus(InstanceStatus.ConnectionFailure, 'Retrying connection')
-				self.init_tcp()
+			if (this.socket === undefined || !this.socket.isConnected) {
+				this.updateStatus(InstanceStatus.ConnectionFailure, 'Retrying connection')
+				this.init_tcp()
 			}
 		}, 5000)
 	}
 
 	init_tcp(cb) {
-		const self = this
+
 		let receivebuffer = ''
 		this.passwordstring = ''
 		let args
@@ -164,73 +164,75 @@ class PJInstance extends InstanceBase {
 		}
 
 		if (this.config.host) {
-			self.authOK = false
-			self.commands = []
+			this.authOK = true
+			this.commands = []
 
-			self.socket = new TCPHelper(self.config.host, 4352)
+			this.socket = new TCPHelper(this.config.host, 4352)
 
-			this.socket.on('error', function (err) {
+			this.socket.on('error', (err) => {
 				if (err.code == 'EPIPE') {
 					// not really connected, yet
 					return
 				}
-				if (self.lastStatus != InstanceStatus.Error + ';' + err.name) {
-					self.updateStatus(InstanceStatus.Error, 'Network ' + err.message)
-					self.lastStatus = InstanceStatus.Error + ';' + err.name
-					self.log('error', 'Network ' + err.message)
+				if (this.lastStatus != InstanceStatus.Error + ';' + err.name) {
+					this.updateStatus(InstanceStatus.Error, 'Network ' + err.message)
+					this.lastStatus = InstanceStatus.Error + ';' + err.name
+					this.log('error', 'Network ' + err.message)
 				}
+				this.pjConnected = false
+				this.authOK = false
 				this.commands = []
-				// set timer to retry connection in 5 secs
-				if (self.socketTimer) {
-					clearInterval(self.socketTimer)
-					delete self.socketTimer
+				if (this.socketTimer) {
+					clearInterval(this.socketTimer)
+					delete this.socketTimer
 				}
 
-				self.authOK = false
-				if (self.socket !== undefined && self.socket.destroy !== undefined) {
-					self.socket.destroy()
-					delete self.socket
+				if (this.socket !== undefined && this.socket.destroy !== undefined) {
+					this.socket.destroy()
+					delete this.socket
 				}
-				self.restartSocket()
+				this.restartSocket()
 			})
 
-			this.socket.on('connect', function () {
+			this.socket.on('connect', () => {
 				receivebuffer = ''
-				self.connect_time = Date.now()
+				this.connect_time = Date.now()
 
-				if (self.lastStatus != InstanceStatus.Ok) {
-					self.updateStatus(InstanceStatus.Ok, 'Connected')
-					self.log('info', 'Connected')
-					self.lastStatus = InstanceStatus.Ok
+				if (this.lastStatus != InstanceStatus.Ok) {
+					this.updateStatus(InstanceStatus.Ok, 'Connected')
+					this.log('info', 'Connected')
+					this.lastStatus = InstanceStatus.Ok
 				}
+				this.pjConnected = true
 				if (this.restartTimer !== undefined) {
 					clearInterval(this.restartTimer)
 					delete this.restartTimer
 				}
-				self.authOK = false
+				this.authOK = false
 			})
 
-			this.socket.on('end', function () {
-				if (self.lastStatus != InstanceStatus.Error + ';Disc') {
-					self.log('error', 'Projector Disconnected')
-					self.updateStatus(InstanceStatus.Error, 'Disconnected')
-					self.lastStatus = InstanceStatus.Error + ';Disc'
+			this.socket.on('end', () => {
+				this.pjConnected = false
+				this.authOK = false
+				if (this.lastStatus != InstanceStatus.Error + ';Disc') {
+					this.log('error', 'Projector Disconnected')
+					this.updateStatus(InstanceStatus.Error, 'Disconnected')
+					this.lastStatus = InstanceStatus.Error + ';Disc'
 				}
 				// set timer to retry connection in 30 secs
-				if (self.socketTimer) {
-					clearInterval(self.socketTimer)
-					delete self.socketTimer
+				if (this.socketTimer) {
+					clearInterval(this.socketTimer)
+					delete this.socketTimer
 				}
-				self.authOK = false
-				if (self.socket !== undefined && self.socket.destroy !== undefined) {
-					self.socket.destroy()
-					delete self.socket
+				if (this.socket !== undefined && this.socket.destroy !== undefined) {
+					this.socket.destroy()
+					delete this.socket
 				}
-				self.log('debug', 'Disconnected')
-				self.restartSocket()
+				this.log('debug', 'Disconnected')
+				this.restartSocket()
 			})
 
-			this.socket.on('data', function (chunk) {
+			this.socket.on('data', (chunk) => {
 				// separate buffered stream into lines with responses
 				let i = 0,
 					line = '',
@@ -239,21 +241,21 @@ class PJInstance extends InstanceBase {
 				while ((i = receivebuffer.indexOf('\r', offset)) !== -1) {
 					line = receivebuffer.slice(offset, i)
 					offset = i + 1
-					self.socket?.emit('receiveline', line.toString())
+					this.socket?.emit('receiveline', line.toString())
 				}
 				receivebuffer = receivebuffer.slice(offset)
 			})
 
-			this.socket.on('receiveline', function (data) {
-				self.connect_time = Date.now()
+			this.socket.on('receiveline', async (data) => {
+				this.connect_time = Date.now()
 
-				if (self.DebugLevel > 1) {
-					self.log('debug', `PJLINK: < ${data}`)
+				if (this.DebugLevel > 1) {
+					this.log('debug', `PJLINK: < ${data}`)
 				}
 
 				// auth password setup
 				if (data.match(/^PJLINK*/i)) {
-					self.check_auth(data, cb)
+					this.check_auth(data, cb)
 					return
 				}
 
@@ -269,14 +271,14 @@ class PJInstance extends InstanceBase {
 						case '1':
 							if (cmd == '%1LAMP') {
 								errorText = 'Projector reports no lamp, disabling lamp check for Laser'
-								self.projector.isLaser = true
+								this.projector.isLaser = true
 							} else {
-								if (projClass === self.projector.class) {
+								if (projClass === this.projector.class) {
 									errorText = 'Undefined command: ' + cmd
 								} else {
 									errorText = 'Command for different Protocol Class: ' + cmd
 									// downgrade to Class 1
-									self.projector.class = 1
+									this.projector.class = 1
 								}
 							}
 							break
@@ -300,12 +302,12 @@ class PJInstance extends InstanceBase {
 					if (cmd == '%2INNM') {
 						// ignore. some PJ do not report input names
 					} else {
-						if (self.lastStatus != newStatus + ';' + err) {
-							self.log(newState, errorText)
-							self.updateStatus(newStatus, errorText)
-							self.lastStatus = newStatus + ';' + err
+						if (this.lastStatus != newStatus + ';' + err) {
+							this.log(newState, errorText)
+							this.updateStatus(newStatus, errorText)
+							this.lastStatus = newStatus + ';' + err
 						}
-						self.log('debug', `PJLINK ERROR: ${errorText}`)
+						this.log('debug', `PJLINK ERROR: ${errorText}`)
 					}
 				} else {
 					let cmd = data.slice(0, 6).toUpperCase()
@@ -318,104 +320,104 @@ class PJInstance extends InstanceBase {
 
 					switch (cmd) {
 						case '%1CLSS':
-							self.projector.class = resp
-							self.setVariableValues({ projectorClass: resp })
-							self.socket.emit('projectorClass')
+							this.projector.class = resp
+							this.setVariableValues({ projectorClass: resp })
+							this.socket.emit('projectorClass')
 							break
 						case '%1NAME':
-							self.projector.name = resp
-							self.setVariableValues({ projectorName: resp })
+							this.projector.name = resp
+							this.setVariableValues({ projectorName: resp })
 							break
 						case '%1INF1':
-							self.projector.make = resp
-							self.setVariableValues({ projectorMake: resp })
+							this.projector.make = resp
+							this.setVariableValues({ projectorMake: resp })
 							break
 						case '%1INF2':
-							self.projector.model = resp
-							self.setVariableValues({ projectorModel: resp })
+							this.projector.model = resp
+							this.setVariableValues({ projectorModel: resp })
 							break
 						case '%1INFO':
-							self.projector.other = resp
-							self.setVariableValues({ projectorOther: resp })
+							this.projector.other = resp
+							this.setVariableValues({ projectorOther: resp })
 							break
 						case '%2RLMP':
-							self.projector.lampReplacement = resp
-							self.setVariableValues({ lampReplacement: resp })
+							this.projector.lampReplacement = resp
+							this.setVariableValues({ lampReplacement: resp })
 							break
 						case '%2RFIL':
-							self.projector.filterReplacement = resp
-							self.setVariableValues({ filterReplacement: resp })
+							this.projector.filterReplacement = resp
+							this.setVariableValues({ filterReplacement: resp })
 							break
 						case '%1INST':
-							self.projector.availInputs = resp.split(' ')
+							this.projector.availInputs = resp.split(' ')
 							// class 1 does not report names
 							// so re-build a generic input list for this PJ
 							let classCount = new Array(Object.keys(CONFIG.INPUT_CLASS).length).fill(0)
-							self.projector.inputNames.length = 0
-							for (let p of self.projector.availInputs) {
+							this.projector.inputNames.length = 0
+							for (let p of this.projector.availInputs) {
 								let classNum = p[0]
 								let inClass = CONFIG.INPUT_CLASS[classNum]
 								classCount[classNum] += 1
-								self.projector.inputNames.push({
+								this.projector.inputNames.push({
 									id: p,
 									label: `${inClass}-${classCount[classNum]} (${p})`,
 								})
 							}
-							self.updateActions = true
+							this.updateActions = true
 							break
 						case '%2INST':
-							self.projector.availInputs = resp.split(' ')
+							this.projector.availInputs = resp.split(' ')
 							// get input names from PJ
-							self.getInputName(self.projector.availInputs)
+							this.getInputName(this.projector.availInputs)
 							break
 						case '%2INNM':
-							if (self.projector.inputNames.length > self.haveNames) {
-								let idx = self.projector.inputNames.findIndex((o) => o.label === null)
-								let num = self.projector.inputNames[idx].id
-								self.projector.inputNames[idx].label = `${resp} (${num})`
-								self.haveNames += 1
-								self.updateActions = self.projector.inputNames.length == self.haveNames
+							if (this.projector.inputNames.length > this.haveNames) {
+								let idx = this.projector.inputNames.findIndex((o) => o.label === null)
+								let num = this.projector.inputNames[idx].id
+								this.projector.inputNames[idx].label = `${resp} (${num})`
+								this.haveNames += 1
+								this.updateActions = this.projector.inputNames.length == this.haveNames
 							}
 							break
 						case '%1POWR':
-							let powerTransition = self.projector.powerState + resp
-							self.projector.powerState = resp
-							self.setVariableValues({ powerState: CONFIG.POWER_STATE[resp] })
-							self.checkFeedbacks('powerState')
+							let powerTransition = this.projector.powerState + resp
+							this.projector.powerState = resp
+							this.setVariableValues({ powerState: CONFIG.POWER_STATE[resp] })
+							this.checkFeedbacks('powerState')
 							// reset warining (if any)
-							if (resp == '1' && self.lastStatus != InstanceStatus.Ok + ';Auth') {
-								self.updateStatus(InstanceStatus.Ok, 'Auth OK')
-								self.lastStatus = InstanceStatus.Ok + ';Auth'
-							} else if (resp == '0' && self.lastStatus != InstanceStatus.Ok + ';Off') {
-								self.updateStatus(InstanceStatus.Ok, 'PJ Standby')
-								self.lastStatus = InstanceStatus.Ok + ';Off'
-							} else if (resp == '2' && self.lastStatus != InstanceStatus.Ok + ';Cool') {
-								self.updateStatus(InstanceStatus.Ok, 'PJ Cooling')
-								self.lastStatus = InstanceStatus.Ok + ';Cool'
-							} else if (resp == '3' && self.lastStatus != InstanceStatus.Ok + ';Warm') {
-								self.updateStatus(InstanceStatus.Ok, 'PJ Warmup')
-								self.lastStatus = InstanceStatus.Ok + ';Warm'
+							if (resp == '1' && this.lastStatus != InstanceStatus.Ok + ';Auth') {
+								this.updateStatus(InstanceStatus.Ok, 'Auth OK')
+								this.lastStatus = InstanceStatus.Ok + ';Auth'
+							} else if (resp == '0' && this.lastStatus != InstanceStatus.Ok + ';Off') {
+								this.updateStatus(InstanceStatus.Ok, 'PJ Standby')
+								this.lastStatus = InstanceStatus.Ok + ';Off'
+							} else if (resp == '2' && this.lastStatus != InstanceStatus.Ok + ';Cool') {
+								this.updateStatus(InstanceStatus.Ok, 'PJ Cooling')
+								this.lastStatus = InstanceStatus.Ok + ';Cool'
+							} else if (resp == '3' && this.lastStatus != InstanceStatus.Ok + ';Warm') {
+								this.updateStatus(InstanceStatus.Ok, 'PJ Warmup')
+								this.lastStatus = InstanceStatus.Ok + ';Warm'
 							}
 							// PJ went from off/warm to powered on, initial Query Mute Status and input
 							if (['01', '31'].includes(powerTransition)) {
-								self.sendCmd('%1AVMT ?')
-								self.sendCmd(`%${self.projector.class}INPT ?`)
+								this.sendCmd('%1AVMT ?')
+								this.sendCmd(`%${this.projector.class}INPT ?`)
 							}
 							break
 						case '%1INPT':
 						case '%2INPT':
-							let iName = self.projector.inputNames.find((o) => o.id == resp)?.label
+							let iName = this.projector.inputNames.find((o) => o.id == resp)?.label
 							if (!iName) {
 								iName = CONFIG.INPUT_CLASS[resp[0]] + ' (' + resp + ')'
-								self.projector.inputNames.push({ id: resp, label: iName })
+								this.projector.inputNames.push({ id: resp, label: iName })
 							}
-							if (resp != self.projector.inputNum) {
-								self.projector.inputNum = resp
-								self.setVariableValues({ projectorInput: iName })
-								self.checkFeedbacks('projectorInput')
+							if (resp != this.projector.inputNum) {
+								this.projector.inputNum = resp
+								this.setVariableValues({ projectorInput: iName })
+								this.checkFeedbacks('projectorInput')
 								// only check input res when input changes
 								if (cmd[1] == '2') {
-									self.sendCmd('%2IRES ?')
+									this.sendCmd('%2IRES ?')
 								}
 							}
 							break
@@ -425,8 +427,8 @@ class PJInstance extends InstanceBase {
 								let thisLamp = Math.floor(i / 2)
 								let lampHours = stat[i]
 								let onState = stat[i + 1] == '1' ? 'On' : 'Off'
-								self.projector.lamps[thisLamp] = { lamp: thisLamp, hours: lampHours, on: onState }
-								self.setVariableValues({
+								this.projector.lamps[thisLamp] = { lamp: thisLamp, hours: lampHours, on: onState }
+								this.setVariableValues({
 									[`lamp${thisLamp + 1}Hrs`]: lampHours,
 									[`lamp${thisLamp + 1}On`]: onState,
 								})
@@ -434,41 +436,41 @@ class PJInstance extends InstanceBase {
 							// fill table for unused lamps
 							for (let i = stat.length; i < 16; i += 2) {
 								let thisLamp = Math.floor(i / 2)
-								self.projector.lamps[thisLamp] = { lamp: thisLamp, hours: 0, on: 'Off' }
-								self.setVariableValues({
+								this.projector.lamps[thisLamp] = { lamp: thisLamp, hours: 0, on: 'Off' }
+								this.setVariableValues({
 									[`lamp${thisLamp + 1}Hrs`]: '',
 									[`lamp${thisLamp + 1}On`]: 'N/A',
 								})
 							}
-							self.checkFeedbacks('lampHour')
+							this.checkFeedbacks('lampHour')
 							break
 						case '%2IRES':
 							res = resp.split('x')
-							self.projector.inputHorzRes = res[0]
-							self.projector.inputVertRes = res[1]
-							self.setVariableValues({
+							this.projector.inputHorzRes = res[0]
+							this.projector.inputVertRes = res[1]
+							this.setVariableValues({
 								inputHorzRes: res[0],
 								inputVertRes: res[1],
 							})
 							break
 						case '%2RRES':
 							res = resp.split('x')
-							self.projector.recHorzRes = res[0]
-							self.projector.recVertRes = res[1]
-							self.setVariableValues({
+							this.projector.recHorzRes = res[0]
+							this.projector.recVertRes = res[1]
+							this.setVariableValues({
 								recHorzRes: res[0],
 								recVertRes: res[1],
 							})
 							break
 						case '%1ERST':
 							const errs = resp.split('')
-							self.projector.errorFan = errs[0]
-							self.projector.errorLamp = errs[1]
-							self.projector.errorTemp = errs[2]
-							self.projector.errorCover = errs[3]
-							self.projector.errorFilter = errs[4]
-							self.projector.errorOther = errs[5]
-							self.setVariableValues({
+							this.projector.errorFan = errs[0]
+							this.projector.errorLamp = errs[1]
+							this.projector.errorTemp = errs[2]
+							this.projector.errorCover = errs[3]
+							this.projector.errorFilter = errs[4]
+							this.projector.errorOther = errs[5]
+							this.setVariableValues({
 								errorFan: CONFIG.ERROR_STATE[errs[0]],
 								errorLamp: CONFIG.ERROR_STATE[errs[1]],
 								errorTemp: CONFIG.ERROR_STATE[errs[2]],
@@ -476,99 +478,94 @@ class PJInstance extends InstanceBase {
 								errorFilter: CONFIG.ERROR_STATE[errs[4]],
 								errorOther: CONFIG.ERROR_STATE[errs[5]],
 							})
-							self.checkFeedbacks('errors')
+							this.checkFeedbacks('errors')
 							break
 						case '%1AVMT':
-							self.projector.muteState = resp
+							this.projector.muteState = resp
 							let tmp = CONFIG.MUTE_ITEM[resp[0]]
 							tmp = tmp + ' ' + CONFIG.ON_OFF_STATE[resp[1]]
-							self.setVariableValues({ muteState: tmp })
-							self.checkFeedbacks('muteState')
+							this.setVariableValues({ muteState: tmp })
+							this.checkFeedbacks('muteState')
 							break
 						case '%2FREZ':
-							self.projector.freezeState = resp
-							self.setVariableValues({ freezeState: CONFIG.ON_OFF_STATE[resp] })
-							self.checkFeedbacks('freezeState')
+							this.projector.freezeState = resp
+							this.setVariableValues({ freezeState: CONFIG.ON_OFF_STATE[resp] })
+							this.checkFeedbacks('freezeState')
 							break
 						case '%2SNUM':
-							self.projector.serialNumber = resp
-							self.setVariableValues({ serialNumber: resp })
+							this.projector.serialNumber = resp
+							this.setVariableValues({ serialNumber: resp })
 							break
 						case '%2SVER':
-							self.projector.softwareVer = resp
-							self.setVariableValues({ softwareVer: resp })
+							this.projector.softwareVer = resp
+							this.setVariableValues({ softwareVer: resp })
 							break
 						case '%2FILT':
-							self.projector.filterUsageTime = resp
-							self.setVariableValues({ filterUsageTime: resp })
+							this.projector.filterUsageTime = resp
+							this.setVariableValues({ filterUsageTime: resp })
 							break
 					}
 				}
 
-				if (self.commands.length) {
-					if (self.lastCmd != data.slice(0, 6)) {
-						self.log('debug', `Response mismatch, expected ${self.lastCmd}`)
+				if (this.commands.length) {
+					if (this.lastCmd != data.slice(0, 6)) {
+						this.log('debug', `Response mismatch, expected ${this.lastCmd}`)
 					}
-					let nextCmd = self.commands.shift()
-					if (self.DebugLevel >= 1) {
-						self.log('debug', `PJLINK: > ${nextCmd}`)
+					let nextCmd = this.commands.shift()
+					if (this.DebugLevel >= 1) {
+						this.log('debug', `PJLINK: > ${nextCmd}`)
 					}
-					self.lastCmd = nextCmd.slice(0, 6)
-					self.socket?.send(self.passwordstring + nextCmd + '\r').then(() => {
-						//woot
-					})
+					this.lastCmd = nextCmd.slice(0, 6)
+					await this.socket?.send(this.passwordstring + nextCmd + '\r')
 				} else {
-					if (self.socketTimer) {
-						clearInterval(self.socketTimer)
-						delete self.socketTimer
+					if (this.socketTimer) {
+						clearInterval(this.socketTimer)
+						delete this.socketTimer
 					}
 
-					self.socketTimer = setInterval(function () {
+					this.socketTimer = setInterval( async () => {
 						// socket isn't connected, abort
-						if (self.socket === undefined || !self.socket.isConnected) {
+						if (this.socket === undefined || !this.socket?.isConnected) {
 							return
 						}
-						if (self.commands.length > 0) {
-							let cmd = self.commands.shift()
-							self.connect_time = Date.now()
-							self.lastCmd = cmd.slice(0, 6)
-							self.socket.send(self.passwordstring + cmd + '\r').then(() => {
-								//woot
-							})
-							clearInterval(self.socketTimer)
-							delete self.socketTimer
+						if (this.commands.length > 0) {
+							let cmd = this.commands.shift()
+							this.connect_time = Date.now()
+							this.lastCmd = cmd.slice(0, 6)
+							await this.socket.send(this.passwordstring + cmd + '\r')
+							clearInterval(this.socketTimer)
+							delete this.socketTimer
 						}
 
 						// istnv: an old version of the documentation stated 4 seconds.
 						//		Reading through version 1.04 and version 2.00,
 						//		idle time is 30 seconds
 
-						if (Date.now() - self.connect_time > 30000) {
-							if (self.socketTimer) {
-								clearInterval(self.socketTimer)
-								delete self.socketTimer
+						if (Date.now() - this.connect_time > 30000) {
+							if (this.socketTimer) {
+								clearInterval(this.socketTimer)
+								delete this.socketTimer
 							}
-							if (self.socket !== undefined && self.socket.destroy !== undefined) {
-								self.socket.destroy()
-								delete self.socket
+							if (this.socket !== undefined && this.socket.destroy !== undefined) {
+								this.socket.destroy()
 							}
 
-							self.authOK = false
+							delete this.socket
+							this.pjConnected = false
+							this.authOK = false
 
-							self.log('debug', 'disconnecting per protocol defintion :(')
+							this.log('debug', 'disconnecting per protocol defintion :(')
 						}
 					}, 100)
 				}
 			})
 
-			self.socket.connect()
+			this.socket.connect()
 		}
 	}
 
 	async sendCmd(cmd) {
-		let self = this
 		let sent = true
-
 		if (this.DebugLevel >= 1) {
 			this.log('debug', `PJLINK(send): > ${cmd}`)
 		}
@@ -580,10 +577,9 @@ class PJInstance extends InstanceBase {
 
 		if (!this.authOK) {
 			sent = false
-		} else if (this.socket.isConnected) {
+		} else if (this.pjConnected) {
 			try {
 				await this.socket.send(this.passwordstring + cmd + '\r')
-				this.lastCmd = cmd
 			} catch (error) {
 				// connected but not ready :/
 				if (error.code == 'EPIPE') {
@@ -968,8 +964,6 @@ class PJInstance extends InstanceBase {
 	}
 
 	init_feedbacks() {
-		let self = this
-
 		const feedbacks = {
 			errors: {
 				type: 'boolean',
@@ -1085,8 +1079,8 @@ class PJInstance extends InstanceBase {
 					// A/V is 'open' only if both are open
 					// A is open either A or A/V
 					// V is open either V or A/V
-					let item = self.projector.muteState[0] & feedback.options.item ? 1 : 0
-					let stat = self.projector.muteState[1] == feedback.options.opt ? 1 : 0
+					let item = this.projector.muteState[0] & feedback.options.item ? 1 : 0
+					let stat = this.projector.muteState[1] == feedback.options.opt ? 1 : 0
 					return stat == item
 				},
 			},
@@ -1104,11 +1098,11 @@ class PJInstance extends InstanceBase {
 						label: 'Select input',
 						id: 'inputNum',
 						default: '31',
-						choices: self.projector.inputNames,
+						choices: this.projector.inputNames,
 					},
 				],
 				callback: (feedback, context) => {
-					return self.projector.inputNum == feedback.options.inputNum
+					return this.projector.inputNum == feedback.options.inputNum
 				},
 			},
 			powerState: {
@@ -1129,7 +1123,7 @@ class PJInstance extends InstanceBase {
 					},
 				],
 				callback: (feedback, context) => {
-					return self.projector.powerState === feedback.options.powerState
+					return this.projector.powerState === feedback.options.powerState
 				},
 			},
 		}
@@ -1138,48 +1132,46 @@ class PJInstance extends InstanceBase {
 	}
 
 	async getProjectorDetails() {
-		var self = this
 
 		//Query Projector Class
-		await self.sendCmd('%1CLSS ?')
-		await self.sendCmd('%1AVMT ?')
+		await this.sendCmd('%1CLSS ?')
+		await this.sendCmd('%1AVMT ?')
 
 		//Projector Class dependant initial queries
-		self.socket.on('projectorClass', async function () {
+		this.socket.on('projectorClass', async () => {
 			//any class
 
 			//Query Projector Name
-			await self.sendCmd('%1NAME ?')
+			await this.sendCmd('%1NAME ?')
 			//Query Projector Manufacturer
-			await self.sendCmd('%1INF1 ?')
+			await this.sendCmd('%1INF1 ?')
 			//Query Projector Product Name
-			await self.sendCmd('%1INF2 ?')
+			await this.sendCmd('%1INF2 ?')
 			//Query Projector Product Name
-			await self.sendCmd('%1INFO ?')
+			await this.sendCmd('%1INFO ?')
 
-			await self.sendCmd(`%${self.projector.class}INST ?`)
+			await this.sendCmd(`%${this.projector.class}INST ?`)
 
-			if (self.projector.class === '2') {
+			if (this.projector.class === '2') {
 				//Query Serial Number
-				await self.sendCmd('%2SNUM ?')
+				await this.sendCmd('%2SNUM ?')
 				//Query Software Version
-				await self.sendCmd('%2SVER ?')
+				await this.sendCmd('%2SVER ?')
 				//Query Lamp Replacement
-				await self.sendCmd('%2RLMP ?')
+				await this.sendCmd('%2RLMP ?')
 				//Query Filter Replacement
-				await self.sendCmd('%2RFIL ?')
+				await this.sendCmd('%2RFIL ?')
 				//Query Recommended Resolution
-				await self.sendCmd('%2RRES ?')
+				await this.sendCmd('%2RRES ?')
 			}
 		})
 	}
 
 	poll() {
-		let self = this
 		let checkHours = false
 
 		// re-connect?
-		if (self.socket === undefined || !self.socket.isConnected) {
+		if (!this.pjConnected) {
 			this.init_tcp()
 			return
 		}
@@ -1234,7 +1226,6 @@ class PJInstance extends InstanceBase {
 	}
 
 	getInputName(inputs) {
-		var self = this
 		// class 2 names the inputs, so start with an empty list
 		this.projector.inputNames = []
 		this.haveNames = 0
