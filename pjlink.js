@@ -68,6 +68,7 @@ class PJInstance extends InstanceBase {
 		this.projector.muteState = '00'
 
 		this.projector.inputNames = CONFIG.INPUTS
+		this.needInputs = true
 
 		this.commands = []
 
@@ -166,8 +167,9 @@ class PJInstance extends InstanceBase {
 		if (this.config.host) {
 			this.authOK = true
 			this.commands = []
+			const port = this.config.port || 4352
 
-			this.socket = new TCPHelper(this.config.host, 4352)
+			this.socket = new TCPHelper(this.config.host, port)
 
 			this.socket.on('error', (err) => {
 				if (err.code == 'EPIPE') {
@@ -299,7 +301,7 @@ class PJInstance extends InstanceBase {
 							newStatus = InstanceStatus.Error
 							break
 					}
-					if (cmd == '%2INNM') {
+					if (cmd == '%2INNM' || (this.projector.powerState != '1' && err == '3')) {
 						// ignore. some PJ do not report input names
 					} else {
 						if (this.lastStatus != newStatus + ';' + err) {
@@ -364,8 +366,10 @@ class PJInstance extends InstanceBase {
 								})
 							}
 							this.updateActions = true
+							this.needInputs = false
 							break
 						case '%2INST':
+							this.needInputs = false
 							this.projector.availInputs = resp.split(' ')
 							// get input names from PJ
 							this.getInputName(this.projector.availInputs)
@@ -601,12 +605,6 @@ class PJInstance extends InstanceBase {
 				label: 'Target IP',
 				width: 6,
 				regex: Regex.IP,
-			},
-			{
-				type: 'textinput',
-				id: 'password',
-				label: 'PJLink password (empty for none)',
-				width: 6,
 			},
 			{
 				type: 'number',
@@ -1135,7 +1133,7 @@ class PJInstance extends InstanceBase {
 
 		//Query Projector Class
 		await this.sendCmd('%1CLSS ?')
-		await this.sendCmd('%1AVMT ?')
+	//	await this.sendCmd('%1AVMT ?')
 
 		//Projector Class dependant initial queries
 		this.socket.on('projectorClass', async () => {
@@ -1150,7 +1148,9 @@ class PJInstance extends InstanceBase {
 			//Query Projector Product Name
 			await this.sendCmd('%1INFO ?')
 
-			await this.sendCmd(`%${this.projector.class}INST ?`)
+			if (this.projector.powerState === '1' && this.needInputs) {
+				await this.sendCmd(`%${this.projector.class}INST ?`)
+			}
 
 			if (this.projector.class === '2') {
 				//Query Serial Number
@@ -1167,7 +1167,7 @@ class PJInstance extends InstanceBase {
 		})
 	}
 
-	poll() {
+	async poll() {
 		let checkHours = false
 
 		// re-connect?
@@ -1192,22 +1192,26 @@ class PJInstance extends InstanceBase {
 			this.updateActions = false // only need once
 		}
 		//Query Power
-		this.sendCmd('%1POWR ?')
+		await this.sendCmd('%1POWR ?')
 		//Query Error Status
-		this.sendCmd('%1ERST ?')
+		await this.sendCmd('%1ERST ?')
 
 		//Query Lamp
 		// -- I was going to add this to the 10 minute check
 		// -- but the response includes the lamp on status
 		// Laser PJ does not have a 'lamp'
 		if (!this.projector.isLaser) {
-			this.sendCmd('%1LAMP ?')
+			await this.sendCmd('%1LAMP ?')
 		}
 
 		//Query Mute Status and input (only valid if PJ is on)
 		if (this.projector.powerState == '1') {
-			this.sendCmd('%1AVMT ?')
-			this.sendCmd(`%${this.projector.class}INPT ?`)
+			await this.sendCmd('%1AVMT ?')
+			await this.sendCmd(`%${this.projector.class}INPT ?`)
+
+			if (this.needInputs) {
+				await this.sendCmd(`%${this.projector.class}INST ?`)
+			}
 		}
 
 		//Class 2 Queries
