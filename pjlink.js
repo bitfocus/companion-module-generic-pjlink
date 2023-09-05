@@ -9,6 +9,12 @@ function ar2obj(a) {
 	return a.map((e, i) => ({ id: `${i}`, label: e }))
 }
 
+function stamp() {
+	const d = new Date()
+	return `${d.getMinutes()}:${d.getSeconds()}.${d.getMilliseconds()}`
+}
+
+
 class PJInstance extends InstanceBase {
 	constructor(internal) {
 		super(internal)
@@ -49,7 +55,7 @@ class PJInstance extends InstanceBase {
 	startup(config) {
 		this.config = config
 
-		this.DebugLevel = process.env.DEVELOPER ? 2 : 0
+		this.DebugLevel = process.env.DEVELOPER || this.config.debug ? 2 : 0
 
 		this.projector = {}
 		this.projector.lamps = []
@@ -250,7 +256,7 @@ class PJInstance extends InstanceBase {
 				this.connect_time = Date.now()
 
 				if (this.DebugLevel > 1) {
-					this.log('debug', `PJLINK: < ${data}`)
+					this.log('debug', `PJLINK: < ${stamp()} ${data}`)
 				}
 
 				// auth password setup
@@ -566,8 +572,9 @@ class PJInstance extends InstanceBase {
 
 	async sendCmd(cmd) {
 		let sent = true
+
 		if (this.DebugLevel >= 1) {
-			this.log('debug', `PJLINK(send): > ${cmd}`)
+			this.log('debug', `PJLINK: >> ${stamp()} ${cmd}`)
 		}
 		if (this.DebugLevel >= 2) {
 			if (this.commands.length > 0) {
@@ -614,6 +621,12 @@ class PJInstance extends InstanceBase {
 				label: 'Enter polling time in seconds',
 				default: 10,
 			},
+			{
+				type: 'checkbox',
+				id: 'debug',
+				label: 'Enable extra debugging information',
+				default: false,
+			}
 		]
 	}
 
