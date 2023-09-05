@@ -85,6 +85,7 @@ export const UpgradeScripts = [
 		}
 
 		for (let action of props.actions) {
+			let changed = false
 			if ('muteState' == action.actionId) {
 				if (action.options.opt.length == 2) {
 					action.options.opt = action.options.opt.slice(1, 2)
