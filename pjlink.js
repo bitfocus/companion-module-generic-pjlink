@@ -614,6 +614,12 @@ class PJInstance extends InstanceBase {
 				regex: Regex.IP,
 			},
 			{
+				type: 'textinput',
+				id: 'password',
+				label: 'PJLink password (empty for none)',
+				width: 6,
+			},
+			{
 				type: 'number',
 				id: 'pollTime',
 				label: 'Enter polling time in seconds',
@@ -624,7 +630,7 @@ class PJInstance extends InstanceBase {
 				id: 'debug',
 				label: 'Enable extra debugging information',
 				default: false,
-			}
+			},
 		]
 	}
 
