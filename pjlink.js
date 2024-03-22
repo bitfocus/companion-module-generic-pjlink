@@ -70,6 +70,7 @@ class PJInstance extends InstanceBase {
 		// Laser projectors return an error when asking
 		// for lamp hours
 		this.projector.isLaser = false
+		this.badPassword = false
 		this.projector.freezeState = '0'
 		this.projector.muteState = '00'
 
@@ -88,47 +89,53 @@ class PJInstance extends InstanceBase {
 		let code = []
 
 		if ('PJLINK ERRA' == data.toUpperCase()) {
-			this.log('error', 'Authentication error. Password not accepted by projector')
+			if (this.lastStatus != InstanceStatus.ConnectionFailure + ';Auth') {
+				this.log('error', 'Authentication error. Password not accepted by projector')
+				this.updateStatus(InstanceStatus.ConnectionFailure, 'Authentication error')
+				this.lastStatus = InstanceStatus.ConnectionFailure + ';Auth'
+			}
 			this.commands.length = 0
-			this.updateStatus(InstanceStatus.Error, 'Authentication error')
 			this.pjConnected = false
+			this.badPassword = true
 			this.authOK = false
 			this.passwordstring = ''
 			this.socket?.destroy()
 			delete this.socket
-			return
-		} else if ('PJLINK 0' == data.toUpperCase()) {
-			this.log('debug', 'Projector does not need password')
-			this.passwordstring = ''
-			this.authOK = true
-		} else if ((code = data.match(/^PJLINK 1 (\S+)/i))) {
-			let digest = code[1] + this.config.password
-			let hasher = crypto.createHash('md5')
-			this.passwordstring = hasher.update(digest, 'utf-8').digest('hex')
-			this.authOK = true
-		}
-		if (this.lastStatus != InstanceStatus.Ok + ';Auth') {
-			this.updateStatus(InstanceStatus.Ok, 'Auth OK')
-			this.lastStatus = InstanceStatus.Ok + ';Auth'
-		}
-
-		// send first command with (or without) auth password
-		this.lastCmd = '%1POWR ?'
-		this.socket?.send(this.passwordstring + this.lastCmd + '\r').then(() => {
-			this.getProjectorDetails()
-			if (this.poll_interval) {
-				delete this.poll_interval
+			this.restartSocket(15000)
+		} else {
+			if ('PJLINK 0' == data.toUpperCase()) {
+				this.log('debug', 'Projector does not need password')
+				this.passwordstring = ''
+				this.authOK = true
+			} else if ((code = data.match(/^PJLINK 1 (\S+)/i))) {
+				let digest = code[1] + this.config.password
+				let hasher = crypto.createHash('md5')
+				this.passwordstring = hasher.update(digest, 'utf-8').digest('hex')
+				this.authOK = true
 			}
-			this.pollTime = this.config.pollTime ? this.config.pollTime * 1000 : 10000
-			this.poll_interval = setInterval(this.poll.bind(this), this.pollTime) //ms for poll
-			this.poll()
-		})
+			if (this.lastStatus != InstanceStatus.Ok + ';Auth') {
+				this.updateStatus(InstanceStatus.Ok, 'Auth OK')
+				this.lastStatus = InstanceStatus.Ok + ';Auth'
+			}
+
+			// send first command with (or without) auth password
+			this.lastCmd = '%1POWR ?'
+			this.socket?.send(this.passwordstring + this.lastCmd + '\r').then(() => {
+				this.getProjectorDetails()
+				if (this.poll_interval) {
+					delete this.poll_interval
+				}
+				this.pollTime = this.config.pollTime ? this.config.pollTime * 1000 : 10000
+				this.poll_interval = setInterval(this.poll.bind(this), this.pollTime) //ms for poll
+				this.poll()
+			})
+		}
 		if (typeof cb == 'function') {
 			cb()
 		}
 	}
 
-	restartSocket() {
+	restartSocket(waitTime = 5000) {
 
 		if (this.restartTimer) {
 			clearInterval(this.restartTimer)
@@ -141,7 +148,7 @@ class PJInstance extends InstanceBase {
 				this.updateStatus(InstanceStatus.ConnectionFailure, 'Retrying connection')
 				this.init_tcp()
 			}
-		}, 5000)
+		}, waitTime)
 	}
 
 	init_tcp(cb) {
@@ -206,10 +213,10 @@ class PJInstance extends InstanceBase {
 				receivebuffer = ''
 				this.connect_time = Date.now()
 
-				if (this.lastStatus != InstanceStatus.Ok) {
-					this.updateStatus(InstanceStatus.Ok, 'Connected')
-					this.log('info', 'Connected')
-					this.lastStatus = InstanceStatus.Ok
+				if (this.lastStatus != InstanceStatus.Connecting) {
+					this.updateStatus(InstanceStatus.Connecting, 'Authorizing')
+					this.log('info', 'Authorizing')
+					this.lastStatus = InstanceStatus.Connecting
 				}
 				this.pjConnected = true
 				if (this.restartTimer !== undefined) {
@@ -317,6 +324,8 @@ class PJInstance extends InstanceBase {
 						}
 						this.log('debug', `PJLINK ERROR: ${errorText}`)
 					}
+				} else if (data.match(/^PJLINK*/i)) {	// auth password setup
+					this.check_auth(data, cb)
 				} else {
 					let cmd = data.slice(0, 6).toUpperCase()
 					let resp = data.slice(7) // leave case alone for labels
@@ -391,6 +400,7 @@ class PJInstance extends InstanceBase {
 							break
 						case '%1POWR':
 							let powerTransition = this.projector.powerState + resp
+							this.badPassword = false
 							this.projector.powerState = resp
 							this.setVariableValues({ powerState: CONFIG.POWER_STATE[resp] })
 							this.checkFeedbacks('powerState')
@@ -533,7 +543,7 @@ class PJInstance extends InstanceBase {
 						delete this.socketTimer
 					}
 
-					this.socketTimer = setInterval( async () => {
+					this.socketTimer = setInterval(async () => {
 						// socket isn't connected, abort
 						if (this.socket === undefined || !this.socket?.isConnected) {
 							return
@@ -586,7 +596,9 @@ class PJInstance extends InstanceBase {
 			}
 		}
 
-		if (!this.authOK) {
+		if (this.badPassword) {
+			return
+		} else if (!this.authOK || this.badPassword) {
 			sent = false
 		} else if (this.pjConnected) {
 			try {
@@ -1152,7 +1164,7 @@ class PJInstance extends InstanceBase {
 
 		//Query Projector Class
 		await this.sendCmd('%1CLSS ?')
-	//	await this.sendCmd('%1AVMT ?')
+		//	await this.sendCmd('%1AVMT ?')
 
 		//Projector Class dependant initial queries
 		this.socket.on('projectorClass', async () => {
@@ -1188,6 +1200,11 @@ class PJInstance extends InstanceBase {
 
 	async poll() {
 		let checkHours = false
+
+		// don't reset until password fixed
+		if (this.badPassword) {
+			return
+		}
 
 		// re-connect?
 		if (!this.pjConnected) {
