@@ -598,7 +598,7 @@ class PJInstance extends InstanceBase {
 
 		if (this.badPassword) {
 			return
-		} else if (!this.authOK || this.badPassword) {
+		} else if (!this.authOK) {
 			sent = false
 		} else if (this.pjConnected) {
 			try {
