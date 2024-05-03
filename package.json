@@ -1,6 +1,6 @@
 {
 	"name": "generic-pjlink",
-	"version": "2.2.1",
+	"version": "2.3.0",
 	"main": "pjlink.js",
 	"type": "module",
 	"scripts": {
@@ -12,9 +12,9 @@
 		"url": "git+https://github.com/bitfocus/companion-module-generic-pjlink.git"
 	},
 	"dependencies": {
-		"@companion-module/base": "^1.7.0"
+		"@companion-module/base": "^1.8.0"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "^1.4.2"
+		"@companion-module/tools": "^1.5.0"
 	}
 }

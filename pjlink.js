@@ -14,7 +14,6 @@ function stamp() {
 	return `${d.getMinutes()}:${d.getSeconds()}.${d.getMilliseconds()}`
 }
 
-
 class PJInstance extends InstanceBase {
 	constructor(internal) {
 		super(internal)
@@ -33,6 +32,9 @@ class PJInstance extends InstanceBase {
 	// When module gets deleted
 	destroy(restart) {
 		if (this.socket !== undefined) {
+			if (this.socket.isConnected()) {
+				this.socket.end()
+			}
 			this.socket.destroy()
 			delete this.socket
 		}
@@ -99,7 +101,10 @@ class PJInstance extends InstanceBase {
 			this.badPassword = true
 			this.authOK = false
 			this.passwordstring = ''
-			this.socket?.destroy()
+			if (this.socket?.isConnected()) {
+				this.socket.end()
+				this.socket.destroy()
+			}
 			delete this.socket
 			this.restartSocket(15000)
 		} else {
@@ -136,7 +141,6 @@ class PJInstance extends InstanceBase {
 	}
 
 	restartSocket(waitTime = 5000) {
-
 		if (this.restartTimer) {
 			clearInterval(this.restartTimer)
 			delete this.restartTimer
@@ -152,7 +156,6 @@ class PJInstance extends InstanceBase {
 	}
 
 	init_tcp(cb) {
-
 		let receivebuffer = ''
 		this.passwordstring = ''
 		let args
@@ -173,6 +176,9 @@ class PJInstance extends InstanceBase {
 		}
 
 		if (this.socket !== undefined) {
+			if (this.socket.isConnected()) {
+				this.socket.end()
+			}
 			this.socket.destroy()
 			delete this.socket
 		}
@@ -203,6 +209,9 @@ class PJInstance extends InstanceBase {
 				}
 
 				if (this.socket !== undefined && this.socket.destroy !== undefined) {
+					if (this.socket.isConnected()) {
+						this.socket.end()
+					}
 					this.socket.destroy()
 					delete this.socket
 				}
@@ -240,6 +249,9 @@ class PJInstance extends InstanceBase {
 					delete this.socketTimer
 				}
 				if (this.socket !== undefined && this.socket.destroy !== undefined) {
+					if (this.socket.isConnected()) {
+						this.socket.end()
+					}
 					this.socket.destroy()
 					delete this.socket
 				}
@@ -324,7 +336,8 @@ class PJInstance extends InstanceBase {
 						}
 						this.log('debug', `PJLINK ERROR: ${errorText}`)
 					}
-				} else if (data.match(/^PJLINK*/i)) {	// auth password setup
+				} else if (data.match(/^PJLINK*/i)) {
+					// auth password setup
 					this.check_auth(data, cb)
 				} else {
 					let cmd = data.slice(0, 6).toUpperCase()
@@ -567,6 +580,9 @@ class PJInstance extends InstanceBase {
 								delete this.socketTimer
 							}
 							if (this.socket !== undefined && this.socket.destroy !== undefined) {
+								if (this.socket.isConnected()) {
+									this.socket.end()
+								}
 								this.socket.destroy()
 							}
 
@@ -1161,7 +1177,6 @@ class PJInstance extends InstanceBase {
 	}
 
 	async getProjectorDetails() {
-
 		//Query Projector Class
 		await this.sendCmd('%1CLSS ?')
 		//	await this.sendCmd('%1AVMT ?')
