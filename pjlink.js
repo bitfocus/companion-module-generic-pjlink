@@ -32,9 +32,6 @@ class PJInstance extends InstanceBase {
 	// When module gets deleted
 	destroy(restart) {
 		if (this.socket !== undefined) {
-			if (this.socket.isConnected()) {
-				this.socket.end()
-			}
 			this.socket.destroy()
 			delete this.socket
 		}
@@ -101,8 +98,7 @@ class PJInstance extends InstanceBase {
 			this.badPassword = true
 			this.authOK = false
 			this.passwordstring = ''
-			if (this.socket?.isConnected()) {
-				this.socket.end()
+			if (this.socket) {
 				this.socket.destroy()
 			}
 			delete this.socket
@@ -176,9 +172,6 @@ class PJInstance extends InstanceBase {
 		}
 
 		if (this.socket !== undefined) {
-			if (this.socket.isConnected()) {
-				this.socket.end()
-			}
 			this.socket.destroy()
 			delete this.socket
 		}
@@ -209,9 +202,6 @@ class PJInstance extends InstanceBase {
 				}
 
 				if (this.socket !== undefined && this.socket.destroy !== undefined) {
-					if (this.socket.isConnected()) {
-						this.socket.end()
-					}
 					this.socket.destroy()
 					delete this.socket
 				}
@@ -249,9 +239,6 @@ class PJInstance extends InstanceBase {
 					delete this.socketTimer
 				}
 				if (this.socket !== undefined && this.socket.destroy !== undefined) {
-					if (this.socket.isConnected()) {
-						this.socket.end()
-					}
 					this.socket.destroy()
 					delete this.socket
 				}
@@ -580,9 +567,6 @@ class PJInstance extends InstanceBase {
 								delete this.socketTimer
 							}
 							if (this.socket !== undefined && this.socket.destroy !== undefined) {
-								if (this.socket.isConnected()) {
-									this.socket.end()
-								}
 								this.socket.destroy()
 							}
 
