@@ -7,4 +7,4 @@ DEBUG-PACKAGED
 DEBUG-PACKAGE
 DEBUG-INSPECTx
 generic-pjlink.zip
-install-state.gz
+.yarn/install-state.gz
