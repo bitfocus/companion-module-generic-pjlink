@@ -86,12 +86,17 @@ class PJInstance extends InstanceBase {
 
 	check_auth(data, cb) {
 		let code = []
+    let restart = 15000
 
 		if ('PJLINK ERRA' == data.toUpperCase()) {
-			if (this.lastStatus != InstanceStatus.ConnectionFailure + ';Auth') {
+			if ('ok' == this.lastStatus.split(';')[0]) {
+				//projector reset its own digest
+        restart = 1000
+			} else if (this.lastStatus != InstanceStatus.ConnectionFailure + ';Auth') {
 				this.log('error', 'Authentication error. Password not accepted by projector')
 				this.updateStatus(InstanceStatus.ConnectionFailure, 'Authentication error')
 				this.lastStatus = InstanceStatus.ConnectionFailure + ';Auth'
+        restart = 15000
 			}
 			this.commands.length = 0
 			this.pjConnected = false
@@ -102,7 +107,7 @@ class PJInstance extends InstanceBase {
 				this.socket.destroy()
 			}
 			delete this.socket
-			this.restartSocket(15000)
+			this.restartSocket(restart)
 		} else {
 			if ('PJLINK 0' == data.toUpperCase()) {
 				this.log('debug', 'Projector does not need password')
@@ -1226,6 +1231,8 @@ class PJInstance extends InstanceBase {
 			this.buildActions() // reload actions
 			this.updateActions = false // only need once
 		}
+		// resend passcode if using
+
 		//Query Power
 		await this.sendCmd('%1POWR ?')
 		//Query Error Status
