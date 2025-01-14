@@ -713,6 +713,13 @@ class PJInstance extends InstanceBase {
 					},
 				],
 			},
+			volumeUp: {
+				name: 'Speaker Volume - Increase by 1',
+			},
+			volumeDown: {
+				name: 'Speaker Volume - Decrease by 1',
+			},
+
 		}
 		for (let cmd in actions) {
 			actions[cmd].callback = async (action, context) => {
@@ -756,6 +763,12 @@ class PJInstance extends InstanceBase {
 
 			case 'inputToggle':
 				cmd = '%1INPT ' + opt.inputNum
+				break
+			case 'volumeUp':
+				cmd = '%1SVOL 1'
+				break
+			case 'volumeDown':
+				cmd = '%1SVOL 0'
 				break
 		}
 
