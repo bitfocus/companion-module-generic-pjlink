@@ -1242,6 +1242,7 @@ class PJInstance extends InstanceBase {
 		// got full list of input names from PJ, update action dropdown
 		if (this.updateActions) {
 			this.buildActions() // reload actions
+			this.init_feedbacks() // reload feedbacks
 			this.updateActions = false // only need once
 		}
 		// resend passcode if using
