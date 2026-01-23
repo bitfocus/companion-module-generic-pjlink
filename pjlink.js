@@ -626,9 +626,9 @@ class PJInstance extends InstanceBase {
 			{
 				type: 'textinput',
 				id: 'host',
-				label: 'Target IP',
+				label: 'Target IP or Hostname',
 				width: 6,
-				regex: Regex.IP,
+				regex: /^[a-zA-Z0-9.-]+$/,
 			},
 			{
 				type: 'textinput',
