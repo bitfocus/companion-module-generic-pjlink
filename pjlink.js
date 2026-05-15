@@ -129,6 +129,7 @@ class PJInstance extends InstanceBase {
 			this.socket?.send(this.passwordstring + this.lastCmd + '\r').then(() => {
 				this.getProjectorDetails()
 				if (this.poll_interval) {
+					clearInterval(this.poll_interval)
 					delete this.poll_interval
 				}
 				this.pollTime = this.config.pollTime ? this.config.pollTime * 1000 : 10000
