@@ -86,17 +86,17 @@ class PJInstance extends InstanceBase {
 
 	check_auth(data, cb) {
 		let code = []
-    let restart = 15000
+		let restart = 15000
 
 		if ('PJLINK ERRA' == data.toUpperCase()) {
 			if ('ok' == this.lastStatus.split(';')[0]) {
 				//projector reset its own digest
-        restart = 1000
+				restart = 1000
 			} else if (this.lastStatus != InstanceStatus.ConnectionFailure + ';Auth') {
 				this.log('error', 'Authentication error. Password not accepted by projector')
 				this.updateStatus(InstanceStatus.ConnectionFailure, 'Authentication error')
 				this.lastStatus = InstanceStatus.ConnectionFailure + ';Auth'
-        restart = 15000
+				restart = 15000
 			}
 			this.commands.length = 0
 			this.pjConnected = false
@@ -113,6 +113,7 @@ class PJInstance extends InstanceBase {
 				this.log('debug', 'Projector does not need password')
 				this.passwordstring = ''
 				this.authOK = true
+				this.badPassword = false
 			} else if ((code = data.match(/^PJLINK 1 (\S+)/i))) {
 				let digest = code[1] + this.config.password
 				let hasher = crypto.createHash('md5')
@@ -129,6 +130,7 @@ class PJInstance extends InstanceBase {
 			this.socket?.send(this.passwordstring + this.lastCmd + '\r').then(() => {
 				this.getProjectorDetails()
 				if (this.poll_interval) {
+					clearInterval(this.poll_interval)
 					delete this.poll_interval
 				}
 				this.pollTime = this.config.pollTime ? this.config.pollTime * 1000 : 10000
@@ -405,14 +407,14 @@ class PJInstance extends InstanceBase {
 							break
 						case '%1POWR':
 							let powerTransition = this.projector.powerState + resp
-							this.badPassword = false
 							this.projector.powerState = resp
 							this.setVariableValues({ powerState: CONFIG.POWER_STATE[resp] })
 							this.checkFeedbacks('powerState')
-							// reset warining (if any)
+							// reset warning (if any)
 							if (resp == '1' && this.lastStatus != InstanceStatus.Ok + ';Auth') {
 								this.updateStatus(InstanceStatus.Ok, 'Auth OK')
 								this.lastStatus = InstanceStatus.Ok + ';Auth'
+								this.badPassword = false
 							} else if (resp == '0' && this.lastStatus != InstanceStatus.Ok + ';Off') {
 								this.updateStatus(InstanceStatus.Ok, 'PJ Standby')
 								this.lastStatus = InstanceStatus.Ok + ';Off'
@@ -565,6 +567,7 @@ class PJInstance extends InstanceBase {
 						// istnv: an old version of the documentation stated 4 seconds.
 						//		Reading through version 1.04 and version 2.00,
 						//		idle time is 30 seconds
+						// Per documentation: 'Must disconnect after 30 seconds if no commands pending'
 
 						if (Date.now() - this.connect_time > 30000) {
 							if (this.socketTimer) {
@@ -579,7 +582,7 @@ class PJInstance extends InstanceBase {
 							this.pjConnected = false
 							this.authOK = false
 
-							this.log('debug', 'disconnecting per protocol defintion :(')
+							this.log('debug', 'disconnecting per protocol definition :(')
 						}
 					}, 100)
 				}
@@ -622,13 +625,16 @@ class PJInstance extends InstanceBase {
 
 	// Return config fields for web config
 	getConfigFields() {
+		const REGEX_IP_OR_HOST =
+			'/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$' +
+			'|^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]).)+([A-Za-z]|[A-Za-z][A-Za-z0-9-]*[A-Za-z0-9])$/'
 		return [
 			{
 				type: 'textinput',
 				id: 'host',
-				label: 'Target IP',
+				label: 'Target Host/IP',
 				width: 6,
-				regex: Regex.IP,
+				regex: REGEX_IP_OR_HOST,
 			},
 			{
 				type: 'textinput',
@@ -719,7 +725,6 @@ class PJInstance extends InstanceBase {
 			volumeDown: {
 				name: 'Speaker Volume - Decrease by 1',
 			},
-
 		}
 		for (let cmd in actions) {
 			actions[cmd].callback = async (action, context) => {
@@ -777,7 +782,7 @@ class PJInstance extends InstanceBase {
 				this.log('debug', `sending ${cmd} to ${this.config.host}`)
 			}
 
-			// reset warining (if any)
+			// reset warning (if any)
 			if (this.lastStatus != InstanceStatus.Ok + ';Auth') {
 				this.updateStatus(InstanceStatus.Ok, 'Auth OK')
 				this.lastStatus = InstanceStatus.Ok + ';Auth'
@@ -971,12 +976,12 @@ class PJInstance extends InstanceBase {
 		})
 
 		variables.push({
-			name: 'Filter Replacment Model Number',
+			name: 'Filter Replacement Model Number',
 			variableId: 'filterReplacement',
 		})
 
 		variables.push({
-			name: 'Lamp Replacment Model Number',
+			name: 'Lamp Replacement Model Number',
 			variableId: 'lampReplacement',
 		})
 
@@ -1242,6 +1247,7 @@ class PJInstance extends InstanceBase {
 		// got full list of input names from PJ, update action dropdown
 		if (this.updateActions) {
 			this.buildActions() // reload actions
+			this.init_feedbacks() // rebuild feedbacks
 			this.updateActions = false // only need once
 		}
 		// resend passcode if using
@@ -1255,7 +1261,7 @@ class PJInstance extends InstanceBase {
 		// -- I was going to add this to the 10 minute check
 		// -- but the response includes the lamp on status
 		// Laser PJ does not have a 'lamp'
-		if (!this.projector.isLaser) {
+		if (checkHours && !this.projector.isLaser) {
 			await this.sendCmd('%1LAMP ?')
 		}
 
