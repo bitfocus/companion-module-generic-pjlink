@@ -1259,7 +1259,7 @@ class PJInstance extends InstanceBase {
 		// -- I was going to add this to the 10 minute check
 		// -- but the response includes the lamp on status
 		// Laser PJ does not have a 'lamp'
-		if (!this.projector.isLaser) {
+		if (checkHours && !this.projector.isLaser) {
 			await this.sendCmd('%1LAMP ?')
 		}
 
