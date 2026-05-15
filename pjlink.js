@@ -622,13 +622,16 @@ class PJInstance extends InstanceBase {
 
 	// Return config fields for web config
 	getConfigFields() {
+		const REGEX_IP_OR_HOST =
+			'/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$' +
+			'|^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]).)+([A-Za-z]|[A-Za-z][A-Za-z0-9-]*[A-Za-z0-9])$/'
 		return [
 			{
 				type: 'textinput',
 				id: 'host',
-				label: 'Target IP',
+				label: 'Target Host/IP',
 				width: 6,
-				regex: Regex.IP,
+				regex: REGEX_IP_OR_HOST,
 			},
 			{
 				type: 'textinput',
