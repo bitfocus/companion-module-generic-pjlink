@@ -579,7 +579,7 @@ class PJInstance extends InstanceBase {
 							this.pjConnected = false
 							this.authOK = false
 
-							this.log('debug', 'disconnecting per protocol defintion :(')
+							this.log('debug', 'disconnecting per protocol definition :(')
 						}
 					}, 100)
 				}
