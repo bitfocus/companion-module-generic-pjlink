@@ -979,7 +979,7 @@ class PJInstance extends InstanceBase {
 		})
 
 		variables.push({
-			name: 'Lamp Replacment Model Number',
+			name: 'Lamp Replacement Model Number',
 			variableId: 'lampReplacement',
 		})
 
