@@ -975,7 +975,7 @@ class PJInstance extends InstanceBase {
 		})
 
 		variables.push({
-			name: 'Filter Replacment Model Number',
+			name: 'Filter Replacement Model Number',
 			variableId: 'filterReplacement',
 		})
 
