@@ -86,17 +86,17 @@ class PJInstance extends InstanceBase {
 
 	check_auth(data, cb) {
 		let code = []
-    let restart = 15000
+		let restart = 15000
 
 		if ('PJLINK ERRA' == data.toUpperCase()) {
 			if ('ok' == this.lastStatus.split(';')[0]) {
 				//projector reset its own digest
-        restart = 1000
+				restart = 1000
 			} else if (this.lastStatus != InstanceStatus.ConnectionFailure + ';Auth') {
 				this.log('error', 'Authentication error. Password not accepted by projector')
 				this.updateStatus(InstanceStatus.ConnectionFailure, 'Authentication error')
 				this.lastStatus = InstanceStatus.ConnectionFailure + ';Auth'
-        restart = 15000
+				restart = 15000
 			}
 			this.commands.length = 0
 			this.pjConnected = false
@@ -113,6 +113,7 @@ class PJInstance extends InstanceBase {
 				this.log('debug', 'Projector does not need password')
 				this.passwordstring = ''
 				this.authOK = true
+				this.badPassword = false
 			} else if ((code = data.match(/^PJLINK 1 (\S+)/i))) {
 				let digest = code[1] + this.config.password
 				let hasher = crypto.createHash('md5')
@@ -406,14 +407,14 @@ class PJInstance extends InstanceBase {
 							break
 						case '%1POWR':
 							let powerTransition = this.projector.powerState + resp
-							this.badPassword = false
 							this.projector.powerState = resp
 							this.setVariableValues({ powerState: CONFIG.POWER_STATE[resp] })
 							this.checkFeedbacks('powerState')
-							// reset warining (if any)
+							// reset warning (if any)
 							if (resp == '1' && this.lastStatus != InstanceStatus.Ok + ';Auth') {
 								this.updateStatus(InstanceStatus.Ok, 'Auth OK')
 								this.lastStatus = InstanceStatus.Ok + ';Auth'
+								this.badPassword = false
 							} else if (resp == '0' && this.lastStatus != InstanceStatus.Ok + ';Off') {
 								this.updateStatus(InstanceStatus.Ok, 'PJ Standby')
 								this.lastStatus = InstanceStatus.Ok + ';Off'
@@ -566,6 +567,7 @@ class PJInstance extends InstanceBase {
 						// istnv: an old version of the documentation stated 4 seconds.
 						//		Reading through version 1.04 and version 2.00,
 						//		idle time is 30 seconds
+						// Per documentation: 'Must disconnect after 30 seconds if no commands pending'
 
 						if (Date.now() - this.connect_time > 30000) {
 							if (this.socketTimer) {
@@ -723,7 +725,6 @@ class PJInstance extends InstanceBase {
 			volumeDown: {
 				name: 'Speaker Volume - Decrease by 1',
 			},
-
 		}
 		for (let cmd in actions) {
 			actions[cmd].callback = async (action, context) => {
