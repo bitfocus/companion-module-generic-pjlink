@@ -579,7 +579,7 @@ class PJInstance extends InstanceBase {
 							this.pjConnected = false
 							this.authOK = false
 
-							this.log('debug', 'disconnecting per protocol defintion :(')
+							this.log('debug', 'disconnecting per protocol definition :(')
 						}
 					}, 100)
 				}
@@ -780,7 +780,7 @@ class PJInstance extends InstanceBase {
 				this.log('debug', `sending ${cmd} to ${this.config.host}`)
 			}
 
-			// reset warining (if any)
+			// reset warning (if any)
 			if (this.lastStatus != InstanceStatus.Ok + ';Auth') {
 				this.updateStatus(InstanceStatus.Ok, 'Auth OK')
 				this.lastStatus = InstanceStatus.Ok + ';Auth'
