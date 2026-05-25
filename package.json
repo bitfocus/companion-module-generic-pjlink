@@ -1,6 +1,6 @@
 {
 	"name": "generic-pjlink",
-	"version": "2.5.1",
+	"version": "2.5.2",
 	"main": "pjlink.js",
 	"type": "module",
 	"scripts": {
