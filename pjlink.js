@@ -580,7 +580,8 @@ class PJInstance extends InstanceBase {
 
 							delete this.socket
 							this.pjConnected = false
-							this.authOK = false
+							this.authOK = true
+							this.badPassword = false
 
 							this.log('debug', 'disconnecting per protocol definition :(')
 						}
