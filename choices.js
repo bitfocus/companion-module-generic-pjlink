@@ -51,7 +51,7 @@ export const MUTE_ITEM = [
 	'Not Muted',	// 0
 	'Video Mute',	// 1
 	'Audio Mute',	// 2
-	'A/V mute',	// 3
+	'A/V Mute',	// 3
 ]
 
 export const POWER_STATE = [
