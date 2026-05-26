@@ -788,6 +788,40 @@ class PJInstance extends InstanceBase {
 				],
 			}
 		}
+
+		for (const mute of ar2obj(CONFIG.MUTE_ITEM)) {
+			presets[`mute_${mute.id}`] = {
+				category: `A/V Mute`,
+				name: `${mute.label}`,
+				type: 'button',
+				style: {
+					text: `${mute.label}`,
+					color: foregroundColorDefault,
+					bgcolor: backgroundColorDefault,
+				},
+				feedbacks: [
+					{
+						feedbackId: 'muteState',
+						style: {
+							color: foregroundColorAlternative,
+							bgcolor: backgroundColorAlternative,
+						},
+						options: { item: mute.id, opt: 1 },
+					},
+				],
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'muteState',
+								options: { item: mute.id, opt: 1 },
+							},
+						],
+						up: [],
+					},
+				],
+			}
+		}
 		this.setPresetDefinitions(presets)
 	}
 
