@@ -581,7 +581,8 @@ class PJInstance extends InstanceBase {
 
 							delete this.socket
 							this.pjConnected = false
-							this.authOK = false
+							this.authOK = true
+							this.badPassword = false
 
 							this.log('debug', 'disconnecting per protocol definition :(')
 						}
@@ -697,7 +698,7 @@ class PJInstance extends InstanceBase {
 				],
 			},
 			freezeState: {
-				name: 'Change Projector Freeze State',
+				name: 'Change Projector Freeze State (Class 2 only)',
 				options: [
 					{
 						type: 'dropdown',
@@ -721,10 +722,10 @@ class PJInstance extends InstanceBase {
 				],
 			},
 			volumeUp: {
-				name: 'Speaker Volume - Increase by 1',
+				name: 'Speaker Volume - Increase by 1 (Class 2 only)',
 			},
 			volumeDown: {
-				name: 'Speaker Volume - Decrease by 1',
+				name: 'Speaker Volume - Decrease by 1 (Class 2 only)',
 			},
 		}
 		for (let cmd in actions) {
@@ -827,10 +828,10 @@ class PJInstance extends InstanceBase {
 				cmd = '%1INPT ' + opt.inputNum
 				break
 			case 'volumeUp':
-				cmd = '%1SVOL 1'
+				cmd = '%2SVOL 1'
 				break
 			case 'volumeDown':
-				cmd = '%1SVOL 0'
+				cmd = '%2SVOL 0'
 				break
 		}
 
