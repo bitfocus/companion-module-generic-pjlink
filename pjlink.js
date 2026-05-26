@@ -81,6 +81,7 @@ class PJInstance extends InstanceBase {
 		this.init_variables()
 		this.init_feedbacks()
 		this.buildActions() // export actions
+		this.buildPresets() // export presets
 		this.init_tcp()
 	}
 
@@ -733,6 +734,62 @@ class PJInstance extends InstanceBase {
 		}
 		this.setActionDefinitions(actions)
 	}
+
+	/**
+	 * Setup presets for this module
+	 *
+	 * @since 2.6.0
+	 */
+	buildPresets() {
+		const colorWhite = combineRgb(255, 255, 255) // White
+		const colorBlack = combineRgb(0, 0, 0) // Black
+		const colorYellow = combineRgb(255, 255, 0) // Yellow
+
+		const foregroundColorDefault = colorWhite
+		const foregroundColorAlternative = colorBlack
+		const backgroundColorDefault = colorBlack
+		const backgroundColorAlternative = colorYellow
+
+		let presets = []
+
+		for (const input of this.projector.inputNames.sort(function (a, b) {
+			return a.label.localeCompare(b.label)
+		})) {
+			presets[`input_${input.id}`] = {
+				category: `Inputs`,
+				name: `Input ${input.label}`,
+				type: 'button',
+				style: {
+					text: `${input.label}`,
+					color: foregroundColorDefault,
+					bgcolor: backgroundColorDefault,
+				},
+				feedbacks: [
+					{
+						feedbackId: 'projectorInput',
+						style: {
+							color: foregroundColorAlternative,
+							bgcolor: backgroundColorAlternative,
+						},
+						options: { inputNum: input.id },
+					},
+				],
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'inputToggle',
+								options: { inputNum: input.id },
+							},
+						],
+						up: [],
+					},
+				],
+			}
+		}
+		this.setPresetDefinitions(presets)
+	}
+
 
 	doAction(action) {
 		let opt = action.options
