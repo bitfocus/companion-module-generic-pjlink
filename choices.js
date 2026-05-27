@@ -11,9 +11,9 @@ export const ERROR_TYPES = [
 ]
 
 export const ERROR_STATE = [
-	'No Error',		// 0
-	'Warning',		// 1
-	'Error',		// 2
+	'No Error',	// 0
+	'Warning',	// 1
+	'Error',	// 2
 ]
 
 export const ON_OFF_STATE = [
@@ -51,7 +51,7 @@ export const MUTE_ITEM = [
 	'Not Muted',	// 0
 	'Video Mute',	// 1
 	'Audio Mute',	// 2
-	'A/V mute',		// 3
+	'A/V Mute',	// 3
 ]
 
 export const POWER_STATE = [
