@@ -69,7 +69,7 @@ export const UpgradeScripts = [
 	},
 
 	function (context, props) {
-		// was broken in original upgradescipts
+		// was broken in original upgradescripts
 		const result = {
 			updatedConfig: null,
 			updatedActions: [],
