@@ -546,7 +546,7 @@ class PJInstance extends InstanceBase {
 				}
 
 				if (this.lastCmd != null && this.lastCmd != splitCmd(data)) {
-					this.log('debug', `Response mismatch, expected ${this.lastCmd} got ${splitCmd(data)}`)
+					this.log('warn', `Response mismatch, expected ${this.lastCmd} got ${splitCmd(data)}`)
 				} else {
 					this.lastCmd = null
 				}
