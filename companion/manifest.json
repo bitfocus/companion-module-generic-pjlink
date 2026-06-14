@@ -24,9 +24,7 @@
 			"email": "joseph@josephadams.dev"
 		}
 	],
-	"legacyIds": [
-		"pjlink"
-	],
+	"legacyIds": ["pjlink"],
 	"runtime": {
 		"type": "node18",
 		"api": "nodejs-ipc",
@@ -34,11 +32,6 @@
 		"entrypoint": "../pjlink.js"
 	},
 	"manufacturer": "JBMIA",
-	"products": [
-		"Projector", "PJLink"
-	],
-	"keywords": [
-		"Projector",
-		"Protocol"
-	]
+	"products": ["Projector", "PJLink"],
+	"keywords": ["Projector", "Protocol"]
 }

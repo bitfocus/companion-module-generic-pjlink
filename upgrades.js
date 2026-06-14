@@ -1,7 +1,7 @@
 import { CreateConvertToBooleanFeedbackUpgradeScript } from '@companion-module/base'
 
 export const UpgradeScripts = [
-	function(context, props) {
+	function (context, props) {
 		const result = {
 			updatedConfig: null,
 			updatedActions: [],
@@ -68,7 +68,8 @@ export const UpgradeScripts = [
 		return result
 	},
 
-	function (context,props) { // was broken in original upgradescipts
+	function (context, props) {
+		// was broken in original upgradescipts
 		const result = {
 			updatedConfig: null,
 			updatedActions: [],
@@ -101,7 +102,6 @@ export const UpgradeScripts = [
 			}
 		}
 
-
 		for (let fb of props.feedbacks) {
 			if ('muteState' == fb.feedbackId) {
 				if (fb.options.muteState) {
@@ -113,5 +113,5 @@ export const UpgradeScripts = [
 			}
 		}
 		return result
-	}
+	},
 ]

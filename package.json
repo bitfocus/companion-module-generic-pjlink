@@ -4,7 +4,8 @@
 	"main": "pjlink.js",
 	"type": "module",
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1"
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"format": "prettier -w ."
 	},
 	"license": "MIT",
 	"repository": {
@@ -14,7 +15,9 @@
 	"dependencies": {
 		"@companion-module/base": "^1.11.3"
 	},
+	"prettier": "@companion-module/tools/.prettierrc.json",
 	"devDependencies": {
-		"@companion-module/tools": "^2.6.1"
+		"@companion-module/tools": "^2.6.1",
+		"prettier": "^3.8.4"
 	}
 }

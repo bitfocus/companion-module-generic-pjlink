@@ -1,4 +1,3 @@
-
 //  constants for choices/dropdowns
 
 export const ERROR_TYPES = [
@@ -11,20 +10,20 @@ export const ERROR_TYPES = [
 ]
 
 export const ERROR_STATE = [
-	'No Error',	// 0
-	'Warning',	// 1
-	'Error',	// 2
+	'No Error', // 0
+	'Warning', // 1
+	'Error', // 2
 ]
 
 export const ON_OFF_STATE = [
-	'Off',		// 0
-	'On' ,		// 1
+	'Off', // 0
+	'On', // 1
 ]
 
 export const ON_OFF_TOGGLE = [
-	'Off',		// 0
-	'On' ,		// 1
-	'Toggle',	// 2
+	'Off', // 0
+	'On', // 1
+	'Toggle', // 2
 ]
 export const INPUTS = [
 	{ id: '11', label: 'RGB1 (11)' },
@@ -39,24 +38,24 @@ export const INPUTS = [
 ]
 
 export const INPUT_CLASS = {
-	'1': 'RGB',
-	'2': 'Video' ,
-	'3': 'Digital' ,
-	'4': 'Storage' ,
-	'5': 'Network' ,
-	'6': 'Internal',
+	1: 'RGB',
+	2: 'Video',
+	3: 'Digital',
+	4: 'Storage',
+	5: 'Network',
+	6: 'Internal',
 }
 
 export const MUTE_ITEM = [
-	'Not Muted',	// 0
-	'Video Mute',	// 1
-	'Audio Mute',	// 2
-	'A/V Mute',	// 3
+	'Not Muted', // 0
+	'Video Mute', // 1
+	'Audio Mute', // 2
+	'A/V Mute', // 3
 ]
 
 export const POWER_STATE = [
-	'Off',		// 0
-	'On',		// 1
-	'Cooling',	// 2
-	'Warm-up',	// 3
+	'Off', // 0
+	'On', // 1
+	'Cooling', // 2
+	'Warm-up', // 3
 ]
