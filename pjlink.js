@@ -139,7 +139,6 @@ class PJInstance extends InstanceBase {
 			await this.poll()
 			this.pollTime = this.config.pollTime ? this.config.pollTime * 1000 : 10000
 			this.poll_interval = setInterval(this.poll.bind(this), 50) //ms for poll
-			// })
 		}
 		if (typeof cb == 'function') {
 			cb()
@@ -547,7 +546,7 @@ class PJInstance extends InstanceBase {
 				}
 
 				if (this.lastCmd != null && this.lastCmd != splitCmd(data)) {
-					this.log('debug', `Response mismatch, expected ${this.lastCmd}`)
+					this.log('warn', `Response mismatch, expected ${this.lastCmd} got ${splitCmd(data)}`)
 				} else {
 					this.lastCmd = null
 				}
