@@ -1,18 +1,328 @@
+# Retains the shared module-checks gates while installing Corepack explicitly for Node 26.
 name: Companion Module Checks
 
 on:
   push:
 
 jobs:
-  check:
-    name: Check module
-
-    if: ${{ !contains(github.repository, 'companion-module-template-') }}
+  package-module:
+    name: Package module
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     permissions:
       packages: read
 
-    uses: bitfocus/actions/.github/workflows/module-checks.yaml@main
-    # with:
-    #   upload-artifact: true # uncomment this to upload the built package as an artifact to this workflow that you can download and share with others
+    outputs:
+      package-file: ${{ steps.package.outputs.filename }}
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository }}
+          persist-credentials: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ '' }}
+          submodules: recursive
+
+      - name: Check module hash
+        if: ${{ '' }}
+        run: |
+          GIT_HASH=$(git rev-parse HEAD)
+          echo "Git sha: $GIT_HASH"
+          if [ ! "$GIT_HASH" == "${{ '' }}" ]; then
+            echo "Git sha does not match requested ref"
+            exit 99
+          fi
+
+      - name: Determine nodejs version
+        id: determine-nodejs
+        shell: bash
+        run: |
+          NODE_RUNTIME=$(jq -r '.runtime.type' companion/manifest.json)
+          echo "Manifest runtime type: $NODE_RUNTIME"
+
+          # Note: an unknown value must fail here. If nothing is written to
+          # $GITHUB_OUTPUT, setup-node silently falls back to whatever node
+          # version is preinstalled on the runner, and the module gets built
+          # against the wrong runtime without any workflow failure.
+          case "$NODE_RUNTIME" in
+            node18) NODE_VERSION="18.x" ;;
+            node22) NODE_VERSION="22.x" ;;
+            node26) NODE_VERSION="26.x" ;;
+            *)
+              echo "::error::Unsupported runtime.type '$NODE_RUNTIME' in companion/manifest.json. Supported values are: node18, node22, node26"
+              exit 99
+              ;;
+          esac
+
+          echo "Using Node.js $NODE_VERSION"
+          echo "version=$NODE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Use Node.js ${{ steps.determine-nodejs.outputs.version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ steps.determine-nodejs.outputs.version }}
+
+      - name: Install Corepack for Node 26
+        shell: bash
+        run: |
+          npm install --global corepack@0.36.0
+          corepack enable
+
+      - name: Check for incorrect lockfiles
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "Error: package-lock.json file found. This repository should use yarn, not npm."
+            exit 1
+          fi
+          if [ ! -f yarn.lock ]; then
+            echo "Error: yarn.lock file not found. This repository must use yarn."
+            exit 1
+          fi
+
+      - name: Collect info
+        shell: bash
+        id: collect-info
+        run: |
+          MODULE_NAME="${{ github.repository }}"
+          MODULE_NAME=$(basename $MODULE_NAME) # remove the owner from the repository name
+
+          # determine the type, to be either connection (module) or surface
+          if [[ "$MODULE_NAME" == companion-module-* ]]; then
+            MODULE_TYPE="module"
+          elif [[ "$MODULE_NAME" == companion-surface-* ]]; then
+            MODULE_TYPE="surface"
+          else
+            echo "Unknown repository name format: $MODULE_NAME. Repository name must start with companion-module- or companion-surface-"
+            exit 99
+          fi
+
+          MODULE_NAME=${MODULE_NAME#companion-module-} # remove the companion-module- prefix
+          MODULE_NAME=${MODULE_NAME#companion-surface-} # remove the companion-surface- prefix
+
+          echo "module-name=$MODULE_NAME" >> $GITHUB_OUTPUT
+          echo "module-type=$MODULE_TYPE" >> $GITHUB_OUTPUT
+
+          MANIFEST_ID=$(jq '.["id"]' companion/manifest.json)
+          if [ ! "$MANIFEST_ID" == "\"${MODULE_NAME}\"" ]; then
+            echo "Module manifest.json id does not match github repository name"
+            exit 99
+          fi
+
+          IS_BUILDING_VERSION=""
+          if [ ! -z "${{ '' }}" ]; then
+            # is building a proper version, use the ref that was requested
+            IS_BUILDING_VERSION="\"${{ '' }}\""
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            IS_BUILDING_VERSION="${{ github.ref }}"
+            IS_BUILDING_VERSION="\"${IS_BUILDING_VERSION#refs/tags/}\""
+          fi
+
+          if [ "$IS_BUILDING_VERSION" != "" ]; then
+            PACKAGE_VERSION=$(jq '.["version"]' package.json)
+            PACKAGE_VERSION_V=$(jq '"v"+ .["version"]' package.json)
+            if [ ! "$PACKAGE_VERSION_V" == "${IS_BUILDING_VERSION}" ] && [ ! "$PACKAGE_VERSION" == "${IS_BUILDING_VERSION}" ]; then
+              echo "Module package.json version does not match git ref"
+              exit 99
+            fi
+          fi
+
+          if grep -q "your-module-name" "companion/manifest.json"; then
+            echo "Module manifest contains references to your-module-name!"
+            exit 99
+          fi
+
+          if ! jq -e '.products | arrays and length > 0' companion/manifest.json > /dev/null; then
+            echo "Module manifest product list is either empty or does not exist"
+            exit 99
+          fi
+
+          if [[ "{{ github.repository }}" == companion-module-* ]] || [[ "{{ github.repository }}" == companion-surface-* ]]; then
+            # only run this check when in modules
+            if ! jq -e '.runtime.apiVersion === "0.0.0"' companion/manifest.json > /dev/null; then
+              echo "Module manifest should have default 0.0.0 runtime.apiVersion"
+              exit 99
+            fi
+          fi
+
+          if [ ! -f companion/HELP.md ]; then
+            echo "Module help file companion/HELP.md does not exist"
+            exit 99
+          fi
+
+      - name: Setup Github packages auth
+        shell: bash
+        run: |
+          # For npm/yarn classic
+          echo "//npm.pkg.github.com/:_authToken=${{ github.token }}" >> ~/.npmrc
+
+          # For Yarn Berry (3+)
+          if yarn --version 2>/dev/null | grep -qE '^[3-9]\.'; then
+            yarn config set 'npmRegistries["//npm.pkg.github.com"].npmAuthToken' "${{ github.token }}"
+          fi
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          yarn install --immutable
+
+      - name: Enforce module-tools version
+        shell: bash
+        run: |
+          set -e
+          PKG="@companion-module/tools"
+
+          # Resolve the actually-installed version of PKG. We can't just read
+          # `<pkg>/package.json`: Node's "exports" field frequently blocks that
+          # subpath (ERR_PACKAGE_PATH_NOT_EXPORTED). Instead resolve the package's
+          # main entry (always allowed) and walk up to the nearest package.json
+          # whose name matches. `yarn node` keeps this working for both the
+          # node-modules and Yarn Berry PnP linkers.
+          get_version() {
+            yarn node -e '
+              const fs = require("fs"), path = require("path");
+              const name = process.argv[1];
+              let dir = path.dirname(require.resolve(name));
+              while (dir !== path.dirname(dir)) {
+                const pj = path.join(dir, "package.json");
+                if (fs.existsSync(pj)) {
+                  const j = JSON.parse(fs.readFileSync(pj, "utf8"));
+                  if (j.name === name) { process.stdout.write(j.version); process.exit(0); }
+                }
+                dir = path.dirname(dir);
+              }
+              process.exit(3);
+            ' "$PKG" 2>/dev/null
+          }
+
+          INSTALLED=$(get_version) || {
+            echo "::error::Could not resolve $PKG. The module must depend on it."
+            exit 99
+          }
+          echo "Installed $PKG version: $INSTALLED"
+
+          MAJOR=${INSTALLED%%.*}
+          if [ "$MAJOR" -le 2 ]; then
+            FLOOR="2.8.0"
+          elif [ "$MAJOR" -eq 3 ]; then
+            FLOOR="3.1.0"
+          else
+            echo "$PKG $INSTALLED is new enough"
+            exit 0
+          fi
+
+          # INSTALLED >= FLOOR when FLOOR sorts lowest (or they are equal)
+          LOWEST=$(printf '%s\n%s\n' "$INSTALLED" "$FLOOR" | sort -V | head -n1)
+          if [ "$INSTALLED" = "$FLOOR" ] || [ "$LOWEST" = "$FLOOR" ]; then
+            echo "$PKG $INSTALLED meets the minimum ($FLOOR)"
+            exit 0
+          fi
+
+          if [ "false" = "true" ]; then
+            echo "$PKG $INSTALLED is below $FLOOR - forcing to $FLOOR"
+            yarn add -D -E "$PKG@$FLOOR"
+            NEW=$(get_version)
+            echo "$PKG is now $NEW"
+          else
+            echo "::error::$PKG version $INSTALLED is below the minimum supported version ($FLOOR). Please upgrade $PKG."
+            exit 99
+          fi
+
+      - name: Build module
+        shell: bash
+        run: |
+          # Some modules have a build script, but many do not
+          if jq -e '.scripts.build' package.json > /dev/null; then
+            yarn run build
+          fi
+
+      - name: Package module
+        id: package
+        shell: bash
+        run: |
+          EXTRA_ARGS=""
+
+          if [ false == "true" ]; then
+            EXTRA_ARGS="--prerelease"
+          fi
+
+          if [ "${{ steps.collect-info.outputs.module-type }}" == "surface" ]; then
+            yarn companion-surface-build --output=pkg $EXTRA_ARGS
+          elif [ "${{ steps.collect-info.outputs.module-type }}" == "module" ]; then
+            yarn companion-module-build --output=pkg $EXTRA_ARGS
+          else
+            echo "Unknown module type '${{ steps.collect-info.outputs.module-type }}'"
+            exit 99
+          fi
+
+      - name: Upload artifact
+        if: ${{ false }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: pkg
+          path: "pkg.tgz"
+
+      - name: Check module launches
+        shell: bash
+        timeout-minutes: 1
+        # This isn't a nice check, and doesn't give a clean output, but hopefully this is enough to catch some issues
+        # note: this must be done after the artifact upload, to ensure it doesn't accidentally mangle the package
+        run: |
+          set +e # disable errexit so we can capture node's non-zero exit without aborting the step
+
+          MODULE_NAME="${{ steps.collect-info.outputs.module-name }}"
+          if [ -f "pkg/${MODULE_NAME}/main.js" ]; then
+            MAIN_JS="pkg/${MODULE_NAME}/main.js"
+            MANIFEST_PATH="pkg/${MODULE_NAME}/companion/manifest.json"
+          else
+            MAIN_JS="pkg/main.js"
+            MANIFEST_PATH="pkg/companion/manifest.json"
+          fi
+
+          API_VERSION=$(jq -r '.runtime.apiVersion // "0.0.0"' "$MANIFEST_PATH")
+          API_MAJOR=$(echo "$API_VERSION" | cut -d. -f1)
+          MODULE_TYPE="${{ steps.collect-info.outputs.module-type }}"
+
+          if [ "$MODULE_TYPE" == "module" ] && [ "$API_MAJOR" == "2" ]; then
+            echo "Testing module with connection API 2.x loading logic"
+
+            # For connections with API 2.x: import main.js and verify the exported value (or its default) is a function
+            RESULT=$(MAIN_JS="$MAIN_JS" node -e "
+              (async () => {
+                const mainPath = 'file://' + process.cwd() + '/' + process.env.MAIN_JS;
+                const mod = await import(mainPath);
+                const isFunction = typeof mod === 'function' || typeof mod.default === 'function';
+                if (!isFunction) {
+                  process.stderr.write('Module export is not a function\n');
+                  process.exit(99);
+                }
+                process.stdout.write('Module export is a function\n');
+              })().catch(e => { process.stderr.write(String(e) + '\n'); process.exit(99); });
+              " 2>&1)
+            CODE=$?
+            if [ $CODE -eq 0 ]; then
+              echo "Module loaded successfully"
+            else
+              echo "Module failed to load:"
+              echo "$RESULT"
+              exit 99
+            fi
+          else
+            echo "Testing with import only loading logic"
+
+            RESULT=$(node "$MAIN_JS" 2>&1)
+            CODE=$?
+            if [ $CODE -eq 0 ]; then
+              echo "Module loaded successfully"
+            elif echo "$RESULT" | grep -q "Failed to startup module"; then
+              # This means it is a connection, and the entrypoint was the cause of the exit
+              echo "Module loaded successfully"
+            else
+              echo "Module failed to load:"
+              echo "$RESULT"
+              exit 99
+            fi
+          fi
