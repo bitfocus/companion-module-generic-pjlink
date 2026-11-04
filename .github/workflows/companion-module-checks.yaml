@@ -23,18 +23,7 @@ jobs:
           repository: ${{ github.repository }}
           persist-credentials: false
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ '' }}
           submodules: recursive
-
-      - name: Check module hash
-        if: ${{ '' }}
-        run: |
-          GIT_HASH=$(git rev-parse HEAD)
-          echo "Git sha: $GIT_HASH"
-          if [ ! "$GIT_HASH" == "${{ '' }}" ]; then
-            echo "Git sha does not match requested ref"
-            exit 99
-          fi
 
       - name: Determine nodejs version
         id: determine-nodejs
@@ -113,10 +102,7 @@ jobs:
           fi
 
           IS_BUILDING_VERSION=""
-          if [ ! -z "${{ '' }}" ]; then
-            # is building a proper version, use the ref that was requested
-            IS_BUILDING_VERSION="\"${{ '' }}\""
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             IS_BUILDING_VERSION="${{ github.ref }}"
             IS_BUILDING_VERSION="\"${IS_BUILDING_VERSION#refs/tags/}\""
           fi
