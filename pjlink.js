@@ -18,6 +18,14 @@ function splitCmd(cmd) {
 	return cmd.split(/[=\ ]/)[0]
 }
 
+// How long to wait for the projector to answer (the PJLINK greeting after
+// connecting, or the response to a command) before giving up on the socket
+// and reconnecting. Without this, one lost response leaves lastCmd set
+// forever: every later command (including user actions like Power On) is
+// queued behind it and never sent, while the status still shows 'Auth OK'.
+const RESPONSE_TIMEOUT_MS = 10000
+const WATCHDOG_INTERVAL_MS = 1000
+
 class PJInstance extends InstanceBase {
 	constructor(internal) {
 		super(internal)
@@ -48,6 +56,16 @@ class PJInstance extends InstanceBase {
 		if (this.restartTimer !== undefined) {
 			clearInterval(this.restartTimer)
 			delete this.restartTimer
+		}
+
+		if (this.socketTimer !== undefined) {
+			clearInterval(this.socketTimer)
+			delete this.socketTimer
+		}
+
+		if (this.watchdogTimer !== undefined) {
+			clearInterval(this.watchdogTimer)
+			delete this.watchdogTimer
 		}
 
 		if (!restart) {
@@ -87,6 +105,44 @@ class PJInstance extends InstanceBase {
 		this.init_variables()
 		this.updateDynamicContent() // Update all dynamic content
 		this.init_tcp()
+
+		if (this.watchdogTimer !== undefined) {
+			clearInterval(this.watchdogTimer)
+		}
+		this.watchdogTimer = setInterval(this.checkResponseTimeout.bind(this), WATCHDOG_INTERVAL_MS)
+	}
+
+	/**
+	 * Note that a command (or the connection greeting) is now awaiting a reply.
+	 */
+	markAwaitingResponse() {
+		this.awaitingSince = Date.now()
+	}
+
+	/**
+	 * Reconnect if the projector has stopped answering on an open socket.
+	 * A half-open TCP connection (e.g. a Wi-Fi bridge or the projector's
+	 * network stack dropping the session silently) never raises 'end' or
+	 * 'error', so without this the module waits forever.
+	 */
+	checkResponseTimeout() {
+		if (this.awaitingSince == null || this.socket === undefined || !this.pjConnected) {
+			return
+		}
+		const waited = Date.now() - this.awaitingSince
+		if (waited < RESPONSE_TIMEOUT_MS) {
+			return
+		}
+
+		const waitingFor = this.authOK ? (this.lastCmd ?? 'response') : 'PJLINK greeting'
+		this.log('warn', `No reply from projector for ${Math.round(waited / 1000)}s (waiting for ${waitingFor}), reconnecting`)
+		this.updateStatus(InstanceStatus.ConnectionFailure, 'No response, reconnecting')
+		this.lastStatus = InstanceStatus.ConnectionFailure + ';Timeout'
+
+		this.awaitingSince = null
+		this.lastCmd = null
+		this.pjConnected = false
+		this.init_tcp() // tears down the old socket and timers, then connects fresh
 	}
 
 	async check_auth(data, cb) {
@@ -206,6 +262,7 @@ class PJInstance extends InstanceBase {
 				this.pjConnected = false
 				this.authOK = false
 				this.commands = []
+				this.awaitingSince = null
 				if (this.socketTimer) {
 					clearInterval(this.socketTimer)
 					delete this.socketTimer
@@ -234,11 +291,14 @@ class PJInstance extends InstanceBase {
 				}
 				this.authOK = false
 				this.lastQuery = null
+				this.lastCmd = null
+				this.markAwaitingResponse() // projector should send its PJLINK greeting
 			})
 
 			this.socket.on('end', () => {
 				this.pjConnected = false
 				this.authOK = false
+				this.awaitingSince = null
 				if (this.lastStatus != InstanceStatus.Error + ';Disc') {
 					this.log('error', 'Projector Disconnected')
 					this.updateStatus(InstanceStatus.Error, 'Disconnected')
@@ -278,6 +338,7 @@ class PJInstance extends InstanceBase {
 
 			this.socket.on('receiveline', async (data) => {
 				this.connect_time = Date.now()
+				this.awaitingSince = null
 
 				if (this.DebugLevel > 1) {
 					this.log('debug', `PJLINK: < ${stamp()} ${data}`)
@@ -558,6 +619,7 @@ class PJInstance extends InstanceBase {
 						this.log('debug', `PJLINK: >> ${nextCmd}`)
 					}
 					this.lastCmd = splitCmd(nextCmd)
+					this.markAwaitingResponse()
 					await this.socket?.send(this.passwordstring + nextCmd + '\r')
 				} else {
 					if (this.socketTimer) {
@@ -574,6 +636,7 @@ class PJInstance extends InstanceBase {
 							let cmd = this.commands.shift()
 							this.connect_time = Date.now()
 							this.lastCmd = splitCmd(cmd)
+							this.markAwaitingResponse()
 							await this.socket.send(this.passwordstring + cmd + '\r')
 							clearInterval(this.socketTimer)
 							delete this.socketTimer
@@ -597,6 +660,7 @@ class PJInstance extends InstanceBase {
 
 							delete this.socket
 							this.pjConnected = false
+							this.awaitingSince = null
 							this.authOK = true
 							this.badPassword = false
 
@@ -630,6 +694,7 @@ class PJInstance extends InstanceBase {
 		} else if (this.lastCmd == null && cued == 0 && this.pjConnected) {
 			// no outstanding commands, send immediately
 			try {
+				this.markAwaitingResponse()
 				await this.socket.send(this.passwordstring + cmd + '\r')
 				sent = true
 				this.lastCmd = splitCmd(cmd)
